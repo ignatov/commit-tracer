@@ -12,6 +12,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.util.io.HttpRequests
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 
@@ -27,9 +28,19 @@ class YouTrackApiService(private val project: Project) {
     private val YOUTRACK_API_TOKEN_KEY = "YOUTRACK_API_TOKEN"
     private val YOUTRACK_API_URL_KEY = "YOUTRACK_API_URL"
     
+    // Path to the .env file in the project root
+    private val envFilePath by lazy {
+        val projectPath = project.basePath
+        if (projectPath != null) {
+            File(projectPath, ".env").absolutePath
+        } else {
+            ""
+        }
+    }
+    
     // Get base URL from .env file or use default from bundle
     private val youtrackUrl by lazy { 
-        EnvFileReader.getInstance(project).getProperty(
+        EnvFileReader.getInstance(envFilePath).getProperty(
             YOUTRACK_API_URL_KEY, 
             CommitTracerBundle.message("youtrack.api.url")
         )
@@ -194,7 +205,7 @@ class YouTrackApiService(private val project: Project) {
      */
     private fun getStoredToken(): String? {
         // Try to get token from .env file first
-        val envToken = EnvFileReader.getInstance(project).getProperty(YOUTRACK_API_TOKEN_KEY)
+        val envToken = EnvFileReader.getInstance(envFilePath).getProperty(YOUTRACK_API_TOKEN_KEY)
         if (!envToken.isNullOrBlank()) {
             logger.info("Using YouTrack API token from .env file")
             return envToken

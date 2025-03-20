@@ -1,8 +1,9 @@
 package com.example.ijcommittracer.util
 
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.project.Project
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -17,35 +18,35 @@ import kotlin.concurrent.write
  * This implementation is thread-safe, with proper synchronization for
  * both instance creation and property access.
  */
-class EnvFileReader(private val project: Project) {
+class EnvFileReader(private val envFilePath: String) {
     private val LOG = logger<EnvFileReader>()
     private val envProperties = Properties()
     private var initialized = false
     private val lock = ReentrantReadWriteLock()
+    private var lastModifiedTime: Long = 0
     
     companion object {
         // Use ConcurrentHashMap for thread-safe instance storage
         private val instances = ConcurrentHashMap<String, EnvFileReader>()
         
         /**
-         * Gets an instance of EnvFileReader for the given project.
+         * Gets an instance of EnvFileReader for the given file path.
          * This method is thread-safe and will always return the same instance
-         * for the same project.
+         * for the same file path.
          * 
-         * @param project The IntelliJ project
-         * @return An EnvFileReader instance for the project
+         * @param filePath The absolute path to the .env file
+         * @return An EnvFileReader instance for the file
          */
-        fun getInstance(project: Project): EnvFileReader {
-            val projectPath = project.basePath ?: ""
+        fun getInstance(filePath: String): EnvFileReader {
             // computeIfAbsent is thread-safe and avoids race conditions
-            return instances.computeIfAbsent(projectPath) {
-                EnvFileReader(project).apply { initialize() }
+            return instances.computeIfAbsent(filePath) {
+                EnvFileReader(filePath).apply { initialize() }
             }
         }
     }
     
     /**
-     * Loads properties from .env file in the project root directory.
+     * Loads properties from .env file.
      * This method is synchronized to prevent multiple threads from 
      * initializing the properties simultaneously.
      */
@@ -59,30 +60,17 @@ class EnvFileReader(private val project: Project) {
             if (initialized) return
             
             try {
-                val projectPath = project.basePath
-                if (projectPath == null) {
-                    LOG.warn("Project base path is null, cannot load .env file")
-                    return
-                }
-                
-                val envFile = File(projectPath, ".env")
+                val envFile = File(envFilePath)
                 LOG.info("Looking for .env file at: ${envFile.absolutePath}")
                 
                 if (envFile.exists()) {
-                    envFile.inputStream().use {
-                        envProperties.load(it)
-                    }
-                    LOG.info("Successfully loaded .env file with ${envProperties.size} properties")
-                    
-                    // Log the keys (but not the values) for debugging
-                    if (envProperties.isNotEmpty()) {
-                        LOG.info("Found properties: ${envProperties.keys.joinToString(", ")}")
-                    }
+                    loadPropertiesFromFile(envFile)
                 } else {
                     LOG.info("No .env file found at ${envFile.absolutePath}, will use credential store")
                     // Try to create a sample .env file for the user
                     try {
-                        val sampleEnvFile = File(projectPath, ".env.sample")
+                        val parentDir = envFile.parentFile
+                        val sampleEnvFile = File(parentDir, ".env.sample")
                         if (!sampleEnvFile.exists()) {
                             sampleEnvFile.writeText("""
                                 # Sample .env file for Commit Tracer
@@ -111,8 +99,25 @@ class EnvFileReader(private val project: Project) {
     }
     
     /**
+     * Loads properties from the specified file and updates the last modified time.
+     */
+    private fun loadPropertiesFromFile(file: File) {
+        file.inputStream().use {
+            envProperties.clear()
+            envProperties.load(it)
+        }
+        lastModifiedTime = file.lastModified()
+        LOG.info("Successfully loaded .env file with ${envProperties.size} properties")
+        
+        // Log the keys (but not the values) for debugging
+        if (envProperties.isNotEmpty()) {
+            LOG.info("Found properties: ${envProperties.keys.joinToString(", ")}")
+        }
+    }
+    
+    /**
      * Gets a property from the .env file.
-     * Thread-safe implementation that ensures proper initialization.
+     * Thread-safe implementation that ensures proper initialization and checks for file changes.
      * 
      * @param key The property key to look up
      * @return The property value or null if not found
@@ -125,6 +130,7 @@ class EnvFileReader(private val project: Project) {
         
         // Use read lock for property access
         return lock.read {
+            checkFileChanged()
             envProperties.getProperty(key)
         }
     }
@@ -156,19 +162,26 @@ class EnvFileReader(private val project: Project) {
         
         // Use read lock for property access
         return lock.read {
+            checkFileChanged()
             envProperties.containsKey(key)
         }
     }
     
     /**
-     * Gets a File object representing a path relative to the project root.
-     * This method is thread-safe as it only reads the project path.
-     * 
-     * @param relativePath The path relative to the project root
-     * @return A File object representing the absolute path, or null if project path is unavailable
+     * Checks if the .env file has been modified since it was last loaded.
+     * If it has, reload the properties.
      */
-    fun getFileInProjectRoot(relativePath: String): File? {
-        val projectPath = project.basePath ?: return null
-        return File(projectPath, relativePath)
+    private fun checkFileChanged() {
+        val file = File(envFilePath)
+        if (file.exists() && file.lastModified() > lastModifiedTime) {
+            // Release read lock and acquire write lock to reload properties
+            lock.write {
+                // Check again inside write lock to avoid race conditions
+                if (file.lastModified() > lastModifiedTime) {
+                    LOG.info("Env file has changed, reloading properties")
+                    loadPropertiesFromFile(file)
+                }
+            }
+        }
     }
 }

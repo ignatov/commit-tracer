@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.io.File
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -59,8 +60,16 @@ class HiBobApiService(private val project: Project) {
             }
         }
         
+        // Get path to .env file
+        val projectPath = project.basePath
+        val envFilePath = if (projectPath != null) {
+            File(projectPath, ".env").absolutePath
+        } else {
+            ""
+        }
+        
         // Try to get token from .env file first
-        val envToken = EnvFileReader.getInstance(project).getProperty(HIBOB_API_TOKEN_KEY)
+        val envToken = EnvFileReader.getInstance(envFilePath).getProperty(HIBOB_API_TOKEN_KEY)
         val token = if (!envToken.isNullOrBlank()) {
             LOG.info("Using HiBob API token from .env file")
             envToken
@@ -106,8 +115,16 @@ class HiBobApiService(private val project: Project) {
      * Fetch employee information from HiBob API.
      */
     private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
+        // Get path to .env file
+        val projectPath = project.basePath
+        val envFilePath = if (projectPath != null) {
+            File(projectPath, ".env").absolutePath
+        } else {
+            ""
+        }
+        
         // Try to get base URL from .env file first
-        val baseUrl = EnvFileReader.getInstance(project).getProperty(HIBOB_API_URL_KEY) ?: tokenStorage.getHiBobBaseUrl()
+        val baseUrl = EnvFileReader.getInstance(envFilePath).getProperty(HIBOB_API_URL_KEY) ?: tokenStorage.getHiBobBaseUrl()
         
         val request = Request.Builder()
             .url("$baseUrl/people?email=$email")
