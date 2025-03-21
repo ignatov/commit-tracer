@@ -161,6 +161,9 @@ class CommitListDialog(
     }
     
     private fun refreshCommitsWithDateFilter() {
+        // Start the loading animation on the filter button
+        dateFilterPanel.startLoading()
+        
         ProgressManager.getInstance().run(object : Task.Backgroundable(
             project, 
             CommitTracerBundle.message("task.filtering.commits"), 
@@ -240,6 +243,9 @@ class CommitListDialog(
             }
             
             override fun onSuccess() {
+                // Stop the loading animation
+                dateFilterPanel.stopLoading()
+                
                 filteredCommits = newCommits
                 
                 // Update UI components with new data
@@ -294,6 +300,18 @@ class CommitListDialog(
                 NotificationService.showInfo(
                     project, 
                     CommitTracerBundle.message("notification.filter.applied", filteredCommits.size),
+                    "Commit Tracer"
+                )
+            }
+            
+            override fun onThrowable(error: Throwable) {
+                // Stop the loading animation if there's an error
+                dateFilterPanel.stopLoading()
+                
+                // Show error notification
+                NotificationService.showError(
+                    project,
+                    "Error filtering commits: ${error.message}",
                     "Commit Tracer"
                 )
             }
