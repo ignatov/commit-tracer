@@ -45,6 +45,7 @@ class CommitListDialog(
     private lateinit var dateFilterPanel: DateFilterPanel
     private lateinit var headerPanel: JPanel
     private lateinit var avgCommitsLabel: JBLabel
+    private lateinit var medianCommitsLabel: JBLabel
     private var filteredCommits: List<CommitInfo> = commits
     
     // Use a fixed format with Locale.US for Git command date parameters
@@ -69,13 +70,34 @@ class CommitListDialog(
         val panel = BorderLayoutPanel()
         panel.preferredSize = Dimension(1000, 600)
         
-        // Calculate average commits per author
+        // Calculate average and median commits per author
         val totalCommits = commits.size
         val totalAuthors = authorStats.size
+        
+        // Calculate average
         val avgCommitsPerAuthor = if (totalAuthors > 0) {
             String.format("%.2f", totalCommits.toDouble() / totalAuthors)
         } else {
             "0.00"
+        }
+        
+        // Calculate median
+        val medianCommitsPerAuthor = if (authorStats.isNotEmpty()) {
+            // Get all commit counts sorted
+            val commitCounts = authorStats.values.map { it.commitCount }.sorted()
+            
+            // Calculate median
+            val middle = commitCounts.size / 2
+            if (commitCounts.size % 2 == 0) {
+                // Even number of elements, average the middle two
+                val median = (commitCounts[middle - 1] + commitCounts[middle]) / 2.0
+                String.format("%.1f", median)
+            } else {
+                // Odd number of elements, take the middle one
+                commitCounts[middle].toString()
+            }
+        } else {
+            "0"
         }
         
         // Create repository info panel
@@ -85,11 +107,13 @@ class CommitListDialog(
         
         val repoLabel = JBLabel(CommitTracerBundle.message("dialog.repository.label", repoName))
         avgCommitsLabel = JBLabel(CommitTracerBundle.message("dialog.avg.commits.label", avgCommitsPerAuthor))
+        medianCommitsLabel = JBLabel(CommitTracerBundle.message("dialog.median.commits.label", medianCommitsPerAuthor))
         
-        // Add both labels to a flow panel for horizontal layout
+        // Add all labels to a flow panel for horizontal layout
         val labelsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 15, 0))
         labelsPanel.add(repoLabel)
         labelsPanel.add(avgCommitsLabel)
+        labelsPanel.add(medianCommitsLabel)
         infoPanel.add(labelsPanel, BorderLayout.CENTER)
         
         // Create date filter panel
@@ -232,15 +256,35 @@ class CommitListDialog(
                 // Update our reference
                 authorsPanel = newAuthorsPanel
                 
-                // Update average commits per author label
+                // Update average commits per author
                 val avgCommitsPerAuthor = if (newAuthorStats.isNotEmpty()) {
                     String.format("%.2f", filteredCommits.size.toDouble() / newAuthorStats.size)
                 } else {
                     "0.00"
                 }
                 
-                // Update the average commits label
+                // Update median commits per author
+                val medianCommitsPerAuthor = if (newAuthorStats.isNotEmpty()) {
+                    // Get all commit counts sorted
+                    val commitCounts = newAuthorStats.values.map { it.commitCount }.sorted()
+                    
+                    // Calculate median
+                    val middle = commitCounts.size / 2
+                    if (commitCounts.size % 2 == 0) {
+                        // Even number of elements, average the middle two
+                        val median = (commitCounts[middle - 1] + commitCounts[middle]) / 2.0
+                        String.format("%.1f", median)
+                    } else {
+                        // Odd number of elements, take the middle one
+                        commitCounts[middle].toString()
+                    }
+                } else {
+                    "0"
+                }
+                
+                // Update the statistics labels
                 avgCommitsLabel.text = CommitTracerBundle.message("dialog.avg.commits.label", avgCommitsPerAuthor)
+                medianCommitsLabel.text = CommitTracerBundle.message("dialog.median.commits.label", medianCommitsPerAuthor)
                 
                 // Reset selection of the new panel to the first row
                 if (newAuthorStats.isNotEmpty()) {
