@@ -58,6 +58,8 @@ class CommitListDialog(
     init {
         title = CommitTracerBundle.message("dialog.commits.title")
         init()
+        // Prevent dialog from closing when Enter key is pressed
+        rootPane.defaultButton = null
     }
 
     override fun createCenterPanel(): JComponent {
