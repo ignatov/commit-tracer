@@ -46,9 +46,8 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
     
     override fun getColumnClass(columnIndex: Int): Class<*> {
         return when (columnIndex) {
-            4, 5, 6, 7, 8 -> Integer::class.java  // Commits, Tickets, Blockers, Regressions, Test Commits Count
+            4, 5, 6, 7, 8, 12 -> Integer::class.java  // Commits, Tickets, Blockers, Regressions, Test Commits Count, Active Days
             9, 13 -> Double::class.java  // Test % and Commits/Day
-            12 -> Long::class.java     // Active Days
             else -> String::class.java
         }
     }

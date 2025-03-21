@@ -163,7 +163,8 @@ class ListCommitsAction : AnAction(), DumbAware {
                     regressionTickets = mutableMapOf(),
                     teamName = employeeInfo?.team ?: "",
                     displayName = employeeInfo?.name ?: "",
-                    title = employeeInfo?.title ?: ""
+                    title = employeeInfo?.title ?: "",
+                    activeDays = mutableSetOf()
                 )
             }
 
@@ -197,6 +198,11 @@ class ListCommitsAction : AnAction(), DumbAware {
             // Update test-touched count if this commit touched tests
             val updatedTestTouchedCount = if (commit.testsTouched) stats.testTouchedCount + 1 else stats.testTouchedCount
             
+            // Add commit date to active days set (just keep the date part, not time)
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val commitDay = dateFormat.format(commit.dateObj)
+            val updatedActiveDays = stats.activeDays.toMutableSet().apply { add(commitDay) }
+            
             val updatedStats = stats.copy(
                 commitCount = stats.commitCount + 1,
                 firstCommitDate = if (commit.dateObj.before(stats.firstCommitDate)) commit.dateObj else stats.firstCommitDate,
@@ -204,7 +210,8 @@ class ListCommitsAction : AnAction(), DumbAware {
                 youTrackTickets = updatedTickets,
                 blockerTickets = updatedBlockerTickets,
                 regressionTickets = updatedRegressionTickets,
-                testTouchedCount = updatedTestTouchedCount
+                testTouchedCount = updatedTestTouchedCount,
+                activeDays = updatedActiveDays
             )
 
             authorMap[author] = updatedStats
@@ -399,14 +406,14 @@ class ListCommitsAction : AnAction(), DumbAware {
         val testTouchedCount: Int = 0,
         val teamName: String = "",
         val displayName: String = "",
-        val title: String = ""
+        val title: String = "",
+        val activeDays: MutableSet<String> = mutableSetOf()
     ) {
         /**
-         * Get active days between first and last commit.
+         * Get active days count - days when actual commits happened.
          */
-        fun getActiveDays(): Long {
-            val diffInMillis = lastCommitDate.time - firstCommitDate.time
-            return TimeUnit.DAYS.convert(diffInMillis, TimeUnit.MILLISECONDS) + 1
+        fun getActiveDays(): Int {
+            return activeDays.size
         }
 
         /**

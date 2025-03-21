@@ -237,11 +237,11 @@ class AuthorsPanel(
                 }
             })
             
-            sorter.setComparator(activeDaysCol, Comparator.comparingLong<Any> { 
+            sorter.setComparator(activeDaysCol, Comparator.comparingInt<Any> { 
                 when (it) {
-                    is Number -> it.toLong()
-                    is String -> it.toString().toLongOrNull() ?: 0L
-                    else -> 0L
+                    is Number -> it.toInt()
+                    is String -> it.toString().toIntOrNull() ?: 0
+                    else -> 0
                 }
             }) // Active Days
             
