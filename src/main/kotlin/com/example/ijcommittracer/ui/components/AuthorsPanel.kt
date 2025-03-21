@@ -86,8 +86,8 @@ class AuthorsPanel(
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
             
             // Set column widths
-            columnModel.getColumn(0).preferredWidth = 80  // Commits count
-            columnModel.getColumn(1).preferredWidth = 200 // Author (email)
+            columnModel.getColumn(0).preferredWidth = 200 // Author (email)
+            columnModel.getColumn(1).preferredWidth = 80  // Commits count
             
             // Set preferred width for W Tests and % W Tests columns
             columnModel.getColumn(2).preferredWidth = 80  // W Tests
@@ -106,8 +106,8 @@ class AuthorsPanel(
             }
             
             // Set column widths - need to adjust indices if HiBob columns are hidden
-            val commitCountCol = 0
-            val authorCol = 1
+            val authorCol = 0
+            val commitCountCol = 1
             val wTestsCol = 2
             val wTestsPercentCol = 3
             val ticketsCountCol = if (hasHiBobInfo) 7 else 4
@@ -130,8 +130,8 @@ class AuthorsPanel(
             // Center-align numeric columns
             val centerRenderer = DefaultTableCellRenderer()
             centerRenderer.horizontalAlignment = SwingConstants.CENTER
-            columnModel.getColumn(wTestsCol).cellRenderer = centerRenderer // W Tests
             columnModel.getColumn(commitCountCol).cellRenderer = centerRenderer // Commit Count
+            columnModel.getColumn(wTestsCol).cellRenderer = centerRenderer // W Tests
             columnModel.getColumn(ticketsCountCol).cellRenderer = centerRenderer // Tickets Count
             columnModel.getColumn(blockersCountCol).cellRenderer = centerRenderer // Blockers Count
             columnModel.getColumn(regressionsCountCol).cellRenderer = centerRenderer // Regressions Count

@@ -13,9 +13,9 @@ import javax.swing.table.AbstractTableModel
  */
 class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableModel() {
     private val columns = arrayOf(
-        CommitTracerBundle.message("dialog.column.author.commits"), // Moved to first position
-        CommitTracerBundle.message("dialog.column.author"),
-        "W Tests",
+        CommitTracerBundle.message("dialog.column.author"), // Author first
+        CommitTracerBundle.message("dialog.column.author.commits"), // Commits second
+        "W Tests", 
         "% W Tests",
         "Name",
         "Team",
@@ -46,7 +46,7 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
     
     override fun getColumnClass(columnIndex: Int): Class<*> {
         return when (columnIndex) {
-            0, 2, 7, 8, 9, 12 -> Integer::class.java  // Commits, W Tests, Tickets, Blockers, Regressions, Active Days
+            1, 2, 7, 8, 9, 12 -> Integer::class.java  // Commits, W Tests, Tickets, Blockers, Regressions, Active Days
             3, 13 -> Double::class.java  // % W Tests and Commits/Day
             else -> String::class.java
         }
@@ -55,8 +55,8 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
     override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
         val author = authors[rowIndex]
         return when (columnIndex) {
-            0 -> author.commitCount
-            1 -> author.author
+            0 -> author.author
+            1 -> author.commitCount
             2 -> author.testTouchedCount
             3 -> {
                 val testPercentage = author.getTestCoveragePercentage()
