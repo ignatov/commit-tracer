@@ -53,10 +53,10 @@ class CommitListDialog(
     private var filteredCommits: List<CommitInfo> = commits
     
     // Use a fixed format with Locale.US for Git command date parameters
-    private val gitDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val gitDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US) // Keep this format for Git commands
     
     // Other date formatters with consistent Locale.US
-    private val displayDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val displayDateFormat = SimpleDateFormat("dd/MM/yy", Locale.US)
     private val displayDateTimeFormat = SimpleDateFormat("dd/MM/yy, HH:mm", Locale.US)
     
     // Pattern for YouTrack ticket references
@@ -247,7 +247,7 @@ class CommitListDialog(
                     val updatedTestTouchedCount = stats.testTouchedCount + (if (commit.testsTouched) 1 else 0)
                     
                     // Add commit date to active days set (just keep the date part, not time)
-                    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    val dateFormat = SimpleDateFormat("dd/MM/yy", Locale.US)
                     val commitDay = dateFormat.format(commit.dateObj)
                     val updatedActiveDays = stats.activeDays.toMutableSet().apply { add(commitDay) }
                     

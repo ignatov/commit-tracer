@@ -18,7 +18,7 @@ import javax.swing.JPanel
  */
 class DateFilterPanel(private val fromDate: Date, private val toDate: Date, private val onFilterApplied: (Date, Date) -> Unit) : JPanel(FlowLayout(FlowLayout.RIGHT)), Disposable {
     
-    private val displayDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val displayDateFormat = SimpleDateFormat("dd/MM/yy", Locale.US)
     lateinit var fromDatePicker: JDateChooser
     lateinit var toDatePicker: JDateChooser
     lateinit var filterButton: JButton

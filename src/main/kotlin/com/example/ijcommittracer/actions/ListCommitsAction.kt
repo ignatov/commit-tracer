@@ -199,7 +199,7 @@ class ListCommitsAction : AnAction(), DumbAware {
             val updatedTestTouchedCount = if (commit.testsTouched) stats.testTouchedCount + 1 else stats.testTouchedCount
             
             // Add commit date to active days set (just keep the date part, not time)
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val dateFormat = SimpleDateFormat("dd/MM/yy", Locale.US)
             val commitDay = dateFormat.format(commit.dateObj)
             val updatedActiveDays = stats.activeDays.toMutableSet().apply { add(commitDay) }
             
@@ -306,7 +306,7 @@ class ListCommitsAction : AnAction(), DumbAware {
         toDate: Date
     ): List<CommitInfo> {
         // Create date range parameters for git log - using consistent Locale.US
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US) // Keep this format for Git commands
         val afterParam = "--after=${dateFormat.format(fromDate)}"
         val beforeParam = "--before=${dateFormat.format(toDate)} 23:59:59"
 
@@ -319,7 +319,7 @@ class ListCommitsAction : AnAction(), DumbAware {
         )
         
         // Use consistent Locale.US for date formatting
-        val displayDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        val displayDateFormat = SimpleDateFormat("dd/MM/yy HH:mm", Locale.US)
         
         // Get current branch name
         val currentBranch = repository.currentBranch?.name ?: "HEAD"

@@ -30,7 +30,7 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
     )
     
     // Use Locale.US for consistent date formatting
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val dateFormat = SimpleDateFormat("dd/MM/yy", Locale.US)
     private val commitsDayFormat = DecimalFormat("0.00", DecimalFormatSymbols(Locale.US))
     
     fun updateData(newAuthors: List<AuthorStats>) {
