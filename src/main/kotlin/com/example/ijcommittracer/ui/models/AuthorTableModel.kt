@@ -13,13 +13,13 @@ import javax.swing.table.AbstractTableModel
  */
 class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableModel() {
     private val columns = arrayOf(
+        CommitTracerBundle.message("dialog.column.author.commits"), // Moved to first position
         CommitTracerBundle.message("dialog.column.author"),
-        "W Tests",  // Moved from pos 8 and renamed from "Commits with Tests"
-        "% W Tests", // Moved from pos 9 and renamed from "Test %"
+        "W Tests",
+        "% W Tests",
         "Name",
         "Team",
         "Title",
-        CommitTracerBundle.message("dialog.column.author.commits"),
         CommitTracerBundle.message("dialog.column.author.tickets"),
         "Blockers",
         "Regressions",
@@ -46,8 +46,8 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
     
     override fun getColumnClass(columnIndex: Int): Class<*> {
         return when (columnIndex) {
-            1, 6, 7, 8, 9, 12 -> Integer::class.java  // W Tests, Commits, Tickets, Blockers, Regressions, Active Days
-            2, 13 -> Double::class.java  // % W Tests and Commits/Day
+            0, 2, 7, 8, 9, 12 -> Integer::class.java  // Commits, W Tests, Tickets, Blockers, Regressions, Active Days
+            3, 13 -> Double::class.java  // % W Tests and Commits/Day
             else -> String::class.java
         }
     }
@@ -55,16 +55,16 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
     override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
         val author = authors[rowIndex]
         return when (columnIndex) {
-            0 -> author.author
-            1 -> author.testTouchedCount
-            2 -> {
+            0 -> author.commitCount
+            1 -> author.author
+            2 -> author.testTouchedCount
+            3 -> {
                 val testPercentage = author.getTestCoveragePercentage()
                 commitsDayFormat.format(testPercentage).toDouble()
             }
-            3 -> author.displayName.ifBlank { "Unknown" }
-            4 -> author.teamName.ifBlank { "Unknown" }
-            5 -> author.title.ifBlank { "Unknown" }
-            6 -> author.commitCount
+            4 -> author.displayName.ifBlank { "Unknown" }
+            5 -> author.teamName.ifBlank { "Unknown" }
+            6 -> author.title.ifBlank { "Unknown" }
             7 -> author.youTrackTickets.size
             8 -> author.getBlockerCount()
             9 -> author.getRegressionCount()

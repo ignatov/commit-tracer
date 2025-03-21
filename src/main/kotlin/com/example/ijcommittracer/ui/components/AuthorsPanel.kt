@@ -86,28 +86,30 @@ class AuthorsPanel(
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
             
             // Set column widths
-            columnModel.getColumn(0).preferredWidth = 200 // Author (email)
+            columnModel.getColumn(0).preferredWidth = 80  // Commits count
+            columnModel.getColumn(1).preferredWidth = 200 // Author (email)
             
-            // Set preferred width for W Tests and % W Tests columns first
-            columnModel.getColumn(1).preferredWidth = 80  // W Tests
-            columnModel.getColumn(2).preferredWidth = 80  // % W Tests
+            // Set preferred width for W Tests and % W Tests columns
+            columnModel.getColumn(2).preferredWidth = 80  // W Tests
+            columnModel.getColumn(3).preferredWidth = 80  // % W Tests
             
             // Only show HiBob columns if we have the information
             if (hasHiBobInfo) {
-                columnModel.getColumn(3).preferredWidth = 150 // Name
-                columnModel.getColumn(4).preferredWidth = 120 // Team
-                columnModel.getColumn(5).preferredWidth = 150 // Title
+                columnModel.getColumn(4).preferredWidth = 150 // Name
+                columnModel.getColumn(5).preferredWidth = 120 // Team
+                columnModel.getColumn(6).preferredWidth = 150 // Title
             } else {
                 // Hide name, team, title columns if no HiBob info
-                columnModel.removeColumn(columnModel.getColumn(5)) // Remove Title
-                columnModel.removeColumn(columnModel.getColumn(4)) // Remove Team
-                columnModel.removeColumn(columnModel.getColumn(3)) // Remove Name
+                columnModel.removeColumn(columnModel.getColumn(6)) // Remove Title
+                columnModel.removeColumn(columnModel.getColumn(5)) // Remove Team
+                columnModel.removeColumn(columnModel.getColumn(4)) // Remove Name
             }
             
             // Set column widths - need to adjust indices if HiBob columns are hidden
-            val wTestsCol = 1
-            val wTestsPercentCol = 2
-            val commitCountCol = if (hasHiBobInfo) 6 else 3
+            val commitCountCol = 0
+            val authorCol = 1
+            val wTestsCol = 2
+            val wTestsPercentCol = 3
             val ticketsCountCol = if (hasHiBobInfo) 7 else 4
             val blockersCountCol = if (hasHiBobInfo) 8 else 5
             val regressionsCountCol = if (hasHiBobInfo) 9 else 6
