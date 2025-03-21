@@ -21,6 +21,7 @@ import git4idea.history.GitHistoryUtils
 import git4idea.repo.GitRepository
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Pattern
@@ -42,6 +43,8 @@ class CommitListDialog(
     private lateinit var commitsPanel: CommitsPanel
     private lateinit var authorsPanel: AuthorsPanel
     private lateinit var dateFilterPanel: DateFilterPanel
+    private lateinit var headerPanel: JPanel
+    private lateinit var avgCommitsLabel: JBLabel
     private var filteredCommits: List<CommitInfo> = commits
     
     // Use a fixed format with Locale.US for Git command date parameters
@@ -66,17 +69,35 @@ class CommitListDialog(
         val panel = BorderLayoutPanel()
         panel.preferredSize = Dimension(1000, 600)
         
-        // Add repository name label
+        // Calculate average commits per author
+        val totalCommits = commits.size
+        val totalAuthors = authorStats.size
+        val avgCommitsPerAuthor = if (totalAuthors > 0) {
+            String.format("%.2f", totalCommits.toDouble() / totalAuthors)
+        } else {
+            "0.00"
+        }
+        
+        // Create repository info panel
         val repoName = if (commits.isNotEmpty()) commits.first().repositoryName else repository.root.name
+        val infoPanel = JPanel(BorderLayout(10, 0))
+        infoPanel.border = JBUI.Borders.empty(0, 5, 5, 0)
+        
         val repoLabel = JBLabel(CommitTracerBundle.message("dialog.repository.label", repoName))
-        repoLabel.border = JBUI.Borders.empty(0, 5, 5, 0)
+        avgCommitsLabel = JBLabel(CommitTracerBundle.message("dialog.avg.commits.label", avgCommitsPerAuthor))
+        
+        // Add both labels to a flow panel for horizontal layout
+        val labelsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 15, 0))
+        labelsPanel.add(repoLabel)
+        labelsPanel.add(avgCommitsLabel)
+        infoPanel.add(labelsPanel, BorderLayout.CENTER)
         
         // Create date filter panel
         dateFilterPanel = DateFilterPanel(fromDate, toDate, this::applyDateFilter)
         
         // Header panel with repository info and filter controls
-        val headerPanel = JPanel(BorderLayout())
-        headerPanel.add(repoLabel, BorderLayout.WEST)
+        headerPanel = JPanel(BorderLayout())
+        headerPanel.add(infoPanel, BorderLayout.WEST)
         headerPanel.add(dateFilterPanel, BorderLayout.EAST)
         panel.add(headerPanel, BorderLayout.NORTH)
 
@@ -210,6 +231,16 @@ class CommitListDialog(
                 
                 // Update our reference
                 authorsPanel = newAuthorsPanel
+                
+                // Update average commits per author label
+                val avgCommitsPerAuthor = if (newAuthorStats.isNotEmpty()) {
+                    String.format("%.2f", filteredCommits.size.toDouble() / newAuthorStats.size)
+                } else {
+                    "0.00"
+                }
+                
+                // Update the average commits label
+                avgCommitsLabel.text = CommitTracerBundle.message("dialog.avg.commits.label", avgCommitsPerAuthor)
                 
                 // Reset selection of the new panel to the first row
                 if (newAuthorStats.isNotEmpty()) {
