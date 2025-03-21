@@ -823,4 +823,14 @@ class AuthorsPanel(
     fun updateData(newAuthors: List<AuthorStats>) {
         (authorsTable.model as AuthorTableModel).updateData(newAuthors)
     }
+    
+    /**
+     * Select the first author in the list
+     */
+    fun selectFirstAuthor() {
+        if (authorsTable.rowCount > 0) {
+            authorsTable.selectionModel.setSelectionInterval(0, 0)
+            authorsTable.scrollRectToVisible(authorsTable.getCellRect(0, 0, true))
+        }
+    }
 }

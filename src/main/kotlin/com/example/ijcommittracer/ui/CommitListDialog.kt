@@ -199,7 +199,22 @@ class CommitListDialog(
                 
                 // Update UI components with new data
                 commitsPanel.updateData(filteredCommits)
-                authorsPanel.updateData(newAuthorStats.values.toList())
+                
+                // Create an entirely new AuthorsPanel with the new data
+                val newAuthorsPanel = AuthorsPanel(newAuthorStats, filteredCommits)
+                
+                // Get the parent component (TabbedPane) and replace the old panel with the new one
+                val tabbedPane = authorsPanel.parent as JBTabbedPane
+                val authorTabIndex = 0 // First tab (By Author)
+                tabbedPane.setComponentAt(authorTabIndex, newAuthorsPanel)
+                
+                // Update our reference
+                authorsPanel = newAuthorsPanel
+                
+                // Reset selection of the new panel to the first row
+                if (newAuthorStats.isNotEmpty()) {
+                    newAuthorsPanel.selectFirstAuthor()
+                }
                 
                 NotificationService.showInfo(
                     project, 
