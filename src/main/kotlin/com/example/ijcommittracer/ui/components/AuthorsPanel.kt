@@ -88,25 +88,29 @@ class AuthorsPanel(
             // Set column widths
             columnModel.getColumn(0).preferredWidth = 200 // Author (email)
             
-            // Only show these columns if we have HiBob information
+            // Set preferred width for W Tests and % W Tests columns first
+            columnModel.getColumn(1).preferredWidth = 80  // W Tests
+            columnModel.getColumn(2).preferredWidth = 80  // % W Tests
+            
+            // Only show HiBob columns if we have the information
             if (hasHiBobInfo) {
-                columnModel.getColumn(1).preferredWidth = 150 // Name
-                columnModel.getColumn(2).preferredWidth = 120 // Team
-                columnModel.getColumn(3).preferredWidth = 150 // Title
+                columnModel.getColumn(3).preferredWidth = 150 // Name
+                columnModel.getColumn(4).preferredWidth = 120 // Team
+                columnModel.getColumn(5).preferredWidth = 150 // Title
             } else {
                 // Hide name, team, title columns if no HiBob info
-                columnModel.removeColumn(columnModel.getColumn(3)) // Remove Title
-                columnModel.removeColumn(columnModel.getColumn(2)) // Remove Team
-                columnModel.removeColumn(columnModel.getColumn(1)) // Remove Name
+                columnModel.removeColumn(columnModel.getColumn(5)) // Remove Title
+                columnModel.removeColumn(columnModel.getColumn(4)) // Remove Team
+                columnModel.removeColumn(columnModel.getColumn(3)) // Remove Name
             }
             
             // Set column widths - need to adjust indices if HiBob columns are hidden
-            val commitCountCol = if (hasHiBobInfo) 4 else 1
-            val ticketsCountCol = if (hasHiBobInfo) 5 else 2
-            val blockersCountCol = if (hasHiBobInfo) 6 else 3
-            val regressionsCountCol = if (hasHiBobInfo) 7 else 4
-            val testCommitsCountCol = if (hasHiBobInfo) 8 else 5
-            val testCoverageCol = if (hasHiBobInfo) 9 else 6
+            val wTestsCol = 1
+            val wTestsPercentCol = 2
+            val commitCountCol = if (hasHiBobInfo) 6 else 3
+            val ticketsCountCol = if (hasHiBobInfo) 7 else 4
+            val blockersCountCol = if (hasHiBobInfo) 8 else 5
+            val regressionsCountCol = if (hasHiBobInfo) 9 else 6
             val firstCommitCol = if (hasHiBobInfo) 10 else 7
             val lastCommitCol = if (hasHiBobInfo) 11 else 8
             val activeDaysCol = if (hasHiBobInfo) 12 else 9
@@ -116,8 +120,6 @@ class AuthorsPanel(
             columnModel.getColumn(ticketsCountCol).preferredWidth = 80  // Tickets Count
             columnModel.getColumn(blockersCountCol).preferredWidth = 80  // Blockers Count
             columnModel.getColumn(regressionsCountCol).preferredWidth = 80  // Regressions Count
-            columnModel.getColumn(testCommitsCountCol).preferredWidth = 80  // Test Commits Count
-            columnModel.getColumn(testCoverageCol).preferredWidth = 80  // Test Coverage %
             columnModel.getColumn(firstCommitCol).preferredWidth = 150 // First Commit
             columnModel.getColumn(lastCommitCol).preferredWidth = 150 // Last Commit
             columnModel.getColumn(activeDaysCol).preferredWidth = 80  // Active Days
@@ -126,13 +128,13 @@ class AuthorsPanel(
             // Center-align numeric columns
             val centerRenderer = DefaultTableCellRenderer()
             centerRenderer.horizontalAlignment = SwingConstants.CENTER
+            columnModel.getColumn(wTestsCol).cellRenderer = centerRenderer // W Tests
             columnModel.getColumn(commitCountCol).cellRenderer = centerRenderer // Commit Count
             columnModel.getColumn(ticketsCountCol).cellRenderer = centerRenderer // Tickets Count
             columnModel.getColumn(blockersCountCol).cellRenderer = centerRenderer // Blockers Count
             columnModel.getColumn(regressionsCountCol).cellRenderer = centerRenderer // Regressions Count
-            columnModel.getColumn(testCommitsCountCol).cellRenderer = centerRenderer // Test Commits Count
             
-            // Create a custom renderer for the Test Coverage % column with color-coding
+            // Create a custom renderer for the W Tests % column with color-coding
             val testCoverageRenderer = object : DefaultTableCellRenderer() {
                 // Use a local formatter for percentage values
                 private val percentageFormat = DecimalFormat("0.00", DecimalFormatSymbols(Locale.US))
@@ -159,7 +161,7 @@ class AuthorsPanel(
                     return label
                 }
             }
-            columnModel.getColumn(testCoverageCol).cellRenderer = testCoverageRenderer // Test Coverage %
+            columnModel.getColumn(wTestsPercentCol).cellRenderer = testCoverageRenderer // % W Tests
             
             columnModel.getColumn(activeDaysCol).cellRenderer = centerRenderer // Active Days
             
@@ -220,16 +222,16 @@ class AuthorsPanel(
                 }
             }) // Regressions Count
             
-            sorter.setComparator(testCommitsCountCol, Comparator.comparingInt<Any> { 
+            sorter.setComparator(wTestsCol, Comparator.comparingInt<Any> { 
                 when (it) {
                     is Number -> it.toInt()
                     is String -> it.toString().toIntOrNull() ?: 0
                     else -> 0
                 }
-            }) // Test Commits Count
+            }) // W Tests column
             
-            // Test coverage % - use numeric value for sorting
-            sorter.setComparator(testCoverageCol, Comparator.comparingDouble<Any> {
+            // W Tests % - use numeric value for sorting
+            sorter.setComparator(wTestsPercentCol, Comparator.comparingDouble<Any> {
                 when (it) {
                     is Number -> it.toDouble()
                     is String -> it.toDoubleOrNull() ?: 0.0

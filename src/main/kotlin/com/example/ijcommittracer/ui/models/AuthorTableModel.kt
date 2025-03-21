@@ -14,6 +14,8 @@ import javax.swing.table.AbstractTableModel
 class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableModel() {
     private val columns = arrayOf(
         CommitTracerBundle.message("dialog.column.author"),
+        "W Tests",  // Moved from pos 8 and renamed from "Commits with Tests"
+        "% W Tests", // Moved from pos 9 and renamed from "Test %"
         "Name",
         "Team",
         "Title",
@@ -21,8 +23,6 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
         CommitTracerBundle.message("dialog.column.author.tickets"),
         "Blockers",
         "Regressions",
-        "Commits with Tests",
-        "Test %",
         CommitTracerBundle.message("dialog.column.author.first"),
         CommitTracerBundle.message("dialog.column.author.last"),
         CommitTracerBundle.message("dialog.column.author.days"),
@@ -46,8 +46,8 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
     
     override fun getColumnClass(columnIndex: Int): Class<*> {
         return when (columnIndex) {
-            4, 5, 6, 7, 8, 12 -> Integer::class.java  // Commits, Tickets, Blockers, Regressions, Test Commits Count, Active Days
-            9, 13 -> Double::class.java  // Test % and Commits/Day
+            1, 6, 7, 8, 9, 12 -> Integer::class.java  // W Tests, Commits, Tickets, Blockers, Regressions, Active Days
+            2, 13 -> Double::class.java  // % W Tests and Commits/Day
             else -> String::class.java
         }
     }
@@ -56,18 +56,18 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
         val author = authors[rowIndex]
         return when (columnIndex) {
             0 -> author.author
-            1 -> author.displayName.ifBlank { "Unknown" }
-            2 -> author.teamName.ifBlank { "Unknown" }
-            3 -> author.title.ifBlank { "Unknown" }
-            4 -> author.commitCount
-            5 -> author.youTrackTickets.size
-            6 -> author.getBlockerCount()
-            7 -> author.getRegressionCount()
-            8 -> author.testTouchedCount
-            9 -> {
+            1 -> author.testTouchedCount
+            2 -> {
                 val testPercentage = author.getTestCoveragePercentage()
                 commitsDayFormat.format(testPercentage).toDouble()
             }
+            3 -> author.displayName.ifBlank { "Unknown" }
+            4 -> author.teamName.ifBlank { "Unknown" }
+            5 -> author.title.ifBlank { "Unknown" }
+            6 -> author.commitCount
+            7 -> author.youTrackTickets.size
+            8 -> author.getBlockerCount()
+            9 -> author.getRegressionCount()
             10 -> dateFormat.format(author.firstCommitDate)
             11 -> dateFormat.format(author.lastCommitDate)
             12 -> author.getActiveDays()
