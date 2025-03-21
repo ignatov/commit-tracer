@@ -3,12 +3,13 @@ package com.example.ijcommittracer.ui.components
 import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.ui.util.JDateChooser
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.ui.LoadingDecorator
+import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.components.JBLabel
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.text.SimpleDateFormat
 import java.util.*
+import javax.swing.Icon
 import javax.swing.JButton
 import javax.swing.JPanel
 
@@ -21,7 +22,8 @@ class DateFilterPanel(private val fromDate: Date, private val toDate: Date, priv
     lateinit var fromDatePicker: JDateChooser
     lateinit var toDatePicker: JDateChooser
     lateinit var filterButton: JButton
-    private lateinit var loadingDecorator: LoadingDecorator
+    private val loadingIcon = IconLoader.getIcon("/process/step_1.svg", this.javaClass)
+    private val loadingLabel = JBLabel(CommitTracerBundle.message("task.filtering.commits"), loadingIcon, JBLabel.LEFT)
     private lateinit var buttonPanel: JPanel
     
     init {
@@ -54,22 +56,23 @@ class DateFilterPanel(private val fromDate: Date, private val toDate: Date, priv
             }
         }
         
-        // Create panel for button with loading spinner
-        buttonPanel = JPanel(FlowLayout(FlowLayout.CENTER, 0, 0))
-        buttonPanel.add(filterButton)
+        // Create panel for button with loading spinner using IntelliJ UI components
+        buttonPanel = com.intellij.util.ui.JBUI.Panels.simplePanel()
+            .addToLeft(filterButton)
+            .addToRight(loadingLabel)
         
-        // Create loading decorator with spinner
-        loadingDecorator = LoadingDecorator(buttonPanel, this, 0)
+        // Hide loading icon initially
+        loadingLabel.isVisible = false
         
-        // Add the decorated button panel
-        add(loadingDecorator.component)
+        // Add the button panel
+        add(buttonPanel)
     }
     
     /**
      * Start the loading animation
      */
     fun startLoading() {
-        loadingDecorator.startLoading(false)
+        loadingLabel.isVisible = true
         filterButton.isEnabled = false
     }
     
@@ -77,7 +80,7 @@ class DateFilterPanel(private val fromDate: Date, private val toDate: Date, priv
      * Stop the loading animation
      */
     fun stopLoading() {
-        loadingDecorator.stopLoading()
+        loadingLabel.isVisible = false
         filterButton.isEnabled = true
     }
     
