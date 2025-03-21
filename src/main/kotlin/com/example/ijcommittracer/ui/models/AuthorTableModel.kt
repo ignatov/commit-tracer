@@ -21,7 +21,7 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
         CommitTracerBundle.message("dialog.column.author.tickets"),
         "Blockers",
         "Regressions",
-        "Test Commits",
+        "Commits with Tests",
         "Test %",
         CommitTracerBundle.message("dialog.column.author.first"),
         CommitTracerBundle.message("dialog.column.author.last"),
