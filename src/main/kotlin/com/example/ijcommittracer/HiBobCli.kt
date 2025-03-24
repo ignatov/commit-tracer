@@ -1,12 +1,11 @@
 package com.example.ijcommittracer
 
-import com.example.ijcommittracer.models.HiBobEmployee
 import com.example.ijcommittracer.models.HiBobResponse
 import com.example.ijcommittracer.models.HiBobSearchRequest
 import com.example.ijcommittracer.models.SimpleEmployeeInfo
 import com.example.ijcommittracer.services.EmployeeInfo
 import com.example.ijcommittracer.util.SimpleEnvFileReader
-import com.google.gson.Gson
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -33,10 +32,12 @@ object HiBobCli {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
         
-    // Create a more lenient Gson instance that can handle malformed JSON
-    private val gson = Gson().newBuilder()
-        .setLenient()
-        .create()
+    // Create a lenient JSON parser that can handle malformed JSON
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+    }
 
     /**
      * Main entry point for CLI application
@@ -155,7 +156,7 @@ object HiBobCli {
         try {
             // Create search request object and convert to JSON
             val searchRequest = HiBobSearchRequest(showInactive = false, email = email)
-            val requestJson = gson.toJson(searchRequest)
+            val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
             
             if (debug) {
                 println("Request payload: $requestJson")
@@ -188,8 +189,8 @@ object HiBobCli {
                 println("Response body: $responseBody")
             }
             
-            // Parse the response using Gson
-            val hibobResponse = gson.fromJson(responseBody, HiBobResponse::class.java)
+            // Parse the response using kotlinx.serialization
+            val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
             
             if (hibobResponse.employees.isEmpty()) {
                 println("No employee found with email $email")
@@ -218,7 +219,7 @@ object HiBobCli {
         try {
             // Create search request object and convert to JSON
             val searchRequest = HiBobSearchRequest(showInactive = false)
-            val requestJson = gson.toJson(searchRequest)
+            val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
             
             if (debug) {
                 println("Request payload: $requestJson")
@@ -251,8 +252,8 @@ object HiBobCli {
                 println("Response body: $responseBody")
             }
             
-            // Parse the response using Gson
-            val hibobResponse = gson.fromJson(responseBody, HiBobResponse::class.java)
+            // Parse the response using kotlinx.serialization
+            val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
             
             // Convert to simplified models
             return@withContext hibobResponse.employees.map { employee ->

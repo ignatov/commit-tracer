@@ -2,6 +2,7 @@ plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "1.9.25"
     id("org.jetbrains.intellij.platform") version "2.2.1"
+    kotlin("plugin.serialization") version "1.9.25"
 }
 
 group = "com.example"
@@ -31,8 +32,8 @@ dependencies {
     // Add OkHttp dependency for HiBob API
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     
-    // Add Gson for JSON serialization/deserialization
-    implementation("com.google.code.gson:gson:2.10.1")
+    // Add Kotlin serialization for JSON handling
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     
     // Add Kotlin coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
@@ -76,11 +77,12 @@ tasks {
         args = project.findProperty("cliArgs")?.toString()?.split(" ") ?: listOf()
     }
     
-    // Task to run the HiBob CLI Test
-    register<JavaExec>("runHiBobCliTest") {
-        description = "Runs the HiBob CLI Test application"
-        mainClass.set("com.example.ijcommittracer.HiBobCliTestKt")
+    // Task to run the HiBob CLI with debug flag
+    register<JavaExec>("runHiBobCliDebug") {
+        description = "Runs the HiBob CLI application with debug flag"
+        mainClass.set("com.example.ijcommittracer.HiBobCliKt")
         classpath = sourceSets["main"].runtimeClasspath
+        args = listOf("--debug")
     }
     
     // Task to create a standalone JAR for HiBobCli

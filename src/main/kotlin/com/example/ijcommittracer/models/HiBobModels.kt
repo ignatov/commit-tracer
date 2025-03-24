@@ -1,10 +1,14 @@
 package com.example.ijcommittracer.models
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Root response model for HiBob API
  */
+@Serializable
 data class HiBobResponse(
     val employees: List<HiBobEmployee> = emptyList()
 )
@@ -12,23 +16,25 @@ data class HiBobResponse(
 /**
  * Detailed employee model from HiBob API
  */
+@Serializable
 data class HiBobEmployee(
-    val id: String,
-    val email: String,
-    val displayName: String,
+    val id: String = "",
+    val email: String = "",
+    val displayName: String = "",
     val avatarUrl: String? = null,
     val coverImageUrl: String? = null,
     val companyId: Long? = null,
     val creationDateTime: String? = null,
     val work: WorkInfo? = null,
     val personal: PersonalInfo? = null,
-    val employee: EmployeeInfo? = null,
+    val employee: EmployeeInfoBase? = null,
     val custom: CustomFields? = null
 )
 
 /**
  * Employee work information
  */
+@Serializable
 data class WorkInfo(
     val startDate: String? = null,
     val title: String? = null,
@@ -41,18 +47,20 @@ data class WorkInfo(
     val secondLevelManager: String? = null,
     val originalStartDate: String? = null,
     val activeEffectiveDate: String? = null,
-    val directReports: Any? = null,  // Can be null, array, or sometimes a number
-    val indirectReports: Any? = null, // Can be null, array, or sometimes a number
+    // Use JsonElement to handle polymorphic types (can be number, array, or null)
+    val directReports: JsonElement? = null,
+    val indirectReports: JsonElement? = null,
     val daysOfPreviousService: Int = 0,
     val tenureDuration: TenureDuration? = null,
     val durationOfEmployment: TenureDuration? = null,
-    val customColumns: Map<String, Any>? = null,
-    val custom: Map<String, Any?>? = null
+    val customColumns: JsonObject? = null,
+    val custom: JsonObject? = null
 )
 
 /**
  * Employee personal information
  */
+@Serializable
 data class PersonalInfo(
     val pronouns: String? = null,
     val honorific: String? = null
@@ -61,7 +69,8 @@ data class PersonalInfo(
 /**
  * Basic employee information
  */
-data class EmployeeInfo(
+@Serializable
+data class EmployeeInfoBase(
     val orgLevel: String? = null,
     val payrollManager: String? = null
 )
@@ -69,6 +78,7 @@ data class EmployeeInfo(
 /**
  * Employee's manager information
  */
+@Serializable
 data class ReportsTo(
     val id: String? = null,
     val email: String? = null,
@@ -80,6 +90,7 @@ data class ReportsTo(
 /**
  * Tenure duration details
  */
+@Serializable
 data class TenureDuration(
     val periodISO: String? = null,
     val sortFactor: Int? = null,
@@ -89,21 +100,23 @@ data class TenureDuration(
 /**
  * Custom fields container
  */
+@Serializable
 data class CustomFields(
-    @SerializedName("category_1695674253204")
-    val categoryFields: CategoryFields? = null,
+    @SerialName("category_1695674253204")
+    val categoryFields: CategoryFields? = null
     // Add other custom field categories as needed
 )
 
 /**
  * Category-specific custom fields
  */
+@Serializable
 data class CategoryFields(
-    @SerializedName("field_1700315786284")
+    @SerialName("field_1700315786284")
     val field1: String? = null,
-    @SerializedName("field_1700315747516")
+    @SerialName("field_1700315747516")
     val field2: String? = null,
-    @SerializedName("field_1715515699335")
+    @SerialName("field_1715515699335")
     val field3: List<String>? = null
     // Add other fields as needed
 )
@@ -111,9 +124,10 @@ data class CategoryFields(
 /**
  * Request payload for HiBob API search
  */
+@Serializable
 data class HiBobSearchRequest(
     val showInactive: Boolean = false,
-    val email: String? = null,
+    val email: String? = null
     // Add other search criteria as needed
 )
 
@@ -121,6 +135,7 @@ data class HiBobSearchRequest(
  * Simplified employee information for display and storage
  * This is used for the main application interface
  */
+@Serializable
 data class SimpleEmployeeInfo(
     val id: String,
     val email: String,
