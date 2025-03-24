@@ -55,6 +55,18 @@ You can provide your HiBob API token in several ways:
 2. Environment variable: Set `HIBOB_API_TOKEN` environment variable
 3. .env file: Create a file with `HIBOB_API_TOKEN=YOUR_TOKEN` and provide the path to the file
 
+## Debugging
+
+To enable debug logs for the env file reader, set the `debug.env` system property to `true`:
+
+```bash
+# With the JAR file
+java -Ddebug.env=true -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar /path/to/.env
+
+# With Gradle
+./gradlew runHiBobCli -PcliArgs="/path/to/.env" -Ddebug.env=true
+```
+
 ## Example Output
 
 ```
