@@ -1,59 +1,45 @@
 package com.example.ijcommittracer.actions
 
+import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.services.HiBobApiService
 import com.example.ijcommittracer.services.NotificationService
 import com.example.ijcommittracer.services.TokenStorageService
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.ui.DialogWrapper
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import javax.swing.JComponent
 
 /**
- * Action to clear the HiBob API token and cached data.
- * Uses the TokenStorageService to securely clear credentials.
+ * Action for clearing stored HiBob API token.
  */
-class ClearHiBobTokenAction : AnAction() {
+class ClearHiBobTokenAction : AnAction(), DumbAware {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         
-        // Ask for confirmation
+        // Confirm with the user before clearing the token
         val result = Messages.showYesNoDialog(
             project,
-            "Are you sure you want to clear the HiBob API token?",
-            "Clear HiBob Token",
-            "Yes, Clear Token",
-            "Cancel",
+            CommitTracerBundle.message("hibob.token.clear.confirmation"),
+            CommitTracerBundle.message("hibob.token.clear.title"),
+            CommitTracerBundle.message("hibob.token.clear.yes"),
+            CommitTracerBundle.message("hibob.token.clear.no"),
             Messages.getQuestionIcon()
         )
         
-        if (result != Messages.YES) {
-            return
-        }
-        
-        // Clear tokens in a background thread to avoid UI freezes
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            // Clear token from secure storage
-            val tokenStorage = TokenStorageService.getInstance(project)
-            tokenStorage.clearHiBobToken()
+        if (result == Messages.YES) {
+            // Clear the token
+            TokenStorageService.getInstance(project).clearHiBobToken()
             
-            // Also clear the cache
-            val hibobService = HiBobApiService.getInstance(project)
-            hibobService.clearCache()
+            // Clear the cache
+            HiBobApiService.getInstance(project).clearCache()
             
-            // Switch to UI thread to show notification
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                NotificationService.showInfo(
-                    project,
-                    "HiBob API token cleared and cache invalidated",
-                    "Commit Tracer"
-                )
-            }
+            // Notify the user
+            NotificationService.showInfo(
+                project,
+                CommitTracerBundle.message("hibob.token.cleared"),
+                "Commit Tracer"
+            )
         }
     }
 }

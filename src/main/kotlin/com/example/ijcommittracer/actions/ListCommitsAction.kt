@@ -2,6 +2,7 @@ package com.example.ijcommittracer.actions
 
 import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.services.NotificationService
+import com.example.ijcommittracer.services.HiBobApiService
 import com.example.ijcommittracer.ui.CommitListDialog
 import com.example.ijcommittracer.ui.SelectRepositoryDialog
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -63,6 +64,10 @@ class ListCommitsAction : AnAction(), DumbAware {
     }
     
     private fun loadCommits(project: Project, repository: GitRepository, fromDate: Date, toDate: Date) {
+        // Initialize HiBob cache in parallel
+        val hiBobService = HiBobApiService.getInstance(project)
+        hiBobService.initializeCache()
+        
         ProgressManager.getInstance().run(object : Task.Backgroundable(
             project, 
             CommitTracerBundle.message("task.loading.commits"), 
@@ -142,7 +147,7 @@ class ListCommitsAction : AnAction(), DumbAware {
     private fun aggregateByAuthor(commits: List<CommitInfo>): Map<String, AuthorStats> {
         val project = this.project
         val authorMap = mutableMapOf<String, AuthorStats>()
-        val hibobService = project.getService(com.example.ijcommittracer.services.HiBobApiService::class.java)
+        val hibobService = HiBobApiService.getInstance(project)
 
         commits.forEach { commit ->
             val author = commit.author

@@ -7,6 +7,7 @@ import com.example.ijcommittracer.actions.ListCommitsAction.CommitInfo
 import com.example.ijcommittracer.actions.ListCommitsAction.ChangedFileInfo
 import com.example.ijcommittracer.actions.ListCommitsAction.ChangeType
 import com.example.ijcommittracer.services.NotificationService
+import com.example.ijcommittracer.services.HiBobApiService
 import com.example.ijcommittracer.ui.components.AuthorsPanel
 import com.example.ijcommittracer.ui.components.CommitsPanel
 import com.example.ijcommittracer.ui.components.DateFilterPanel
@@ -168,6 +169,9 @@ class CommitListDialog(
         // Start the loading animation on the filter button
         dateFilterPanel.startLoading()
         
+        // Initialize HiBob cache in parallel for employee data
+        HiBobApiService.getInstance(project).initializeCache()
+        
         ProgressManager.getInstance().run(object : Task.Backgroundable(
             project, 
             CommitTracerBundle.message("task.filtering.commits"), 
@@ -218,12 +222,16 @@ class CommitListDialog(
                 
                 // Aggregate by author
                 val authorMap = mutableMapOf<String, AuthorStats>()
+                val hibobService = HiBobApiService.getInstance(project)
                 
                 newCommits.forEach { commit ->
                     val author = commit.author
                     
                     // Extract YouTrack tickets from the commit message
                     val tickets = extractYouTrackTickets(commit.message)
+                    
+                    // Get employee info from HiBob
+                    val employeeInfo = hibobService.getEmployeeByEmail(author)
                     
                     val stats = authorMap.getOrPut(author) { 
                         AuthorStats(
@@ -232,7 +240,10 @@ class CommitListDialog(
                             firstCommitDate = commit.dateObj,
                             lastCommitDate = commit.dateObj,
                             youTrackTickets = mutableMapOf(),
-                            activeDays = mutableSetOf()
+                            activeDays = mutableSetOf(),
+                            displayName = employeeInfo?.name ?: "",
+                            teamName = employeeInfo?.team ?: "",
+                            title = employeeInfo?.title ?: ""
                         )
                     }
                     

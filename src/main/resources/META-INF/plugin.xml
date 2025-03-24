@@ -79,13 +79,13 @@
             <!-- Add HiBob token configuration actions -->
             <action id="IjCommitTracer.ConfigureHiBobToken" 
                     class="com.example.ijcommittracer.actions.ConfigureHiBobTokenAction" 
-                    text="Configure HiBob API" 
-                    description="Set or update HiBob API access token">
+                    text="Configure HiBob Token" 
+                    description="Set or update HiBob API token">
             </action>
             
             <action id="IjCommitTracer.ClearHiBobToken" 
                     class="com.example.ijcommittracer.actions.ClearHiBobTokenAction" 
-                    text="Clear HiBob API Token" 
+                    text="Clear HiBob Token" 
                     description="Remove stored HiBob API token">
             </action>
         </group>
@@ -123,13 +123,13 @@
             <!-- Add HiBob token configuration actions -->
             <action id="IjCommitTracer.ConfigureHiBobTokenVcs" 
                     class="com.example.ijcommittracer.actions.ConfigureHiBobTokenAction" 
-                    text="Configure HiBob API" 
-                    description="Set or update HiBob API access token">
+                    text="Configure HiBob Token" 
+                    description="Set or update HiBob API token">
             </action>
             
             <action id="IjCommitTracer.ClearHiBobTokenVcs" 
                     class="com.example.ijcommittracer.actions.ClearHiBobTokenAction" 
-                    text="Clear HiBob API Token" 
+                    text="Clear HiBob Token" 
                     description="Remove stored HiBob API token">
             </action>
         </group>
