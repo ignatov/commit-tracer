@@ -93,7 +93,11 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
                 team = cachedInfo.info.team,
                 title = cachedInfo.info.title,
                 manager = cachedInfo.info.manager,
-                timestamp = cachedInfo.timestamp.toString()
+                timestamp = cachedInfo.timestamp.toString(),
+                departmentId = cachedInfo.info.departmentId,
+                titleId = cachedInfo.info.titleId,
+                siteId = cachedInfo.info.siteId,
+                teamId = cachedInfo.info.teamId
             )
         }
         
@@ -285,26 +289,44 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
             
             LOG.info("Fetching all employees from HiBob API")
             
+            // Pre-load named lists for enrichment
+            client.fetchNamedLists(
+                debugLogger = { message -> LOG.debug(message) },
+                errorLogger = { message, error -> LOG.warn(message, error) }
+            )
+            
             // Use our shared API client to fetch all employees
             val employees = client.fetchAllEmployees(
                 debugLogger = { message -> LOG.debug(message) },
                 errorLogger = { message, error -> LOG.warn(message, error) }
             )
             
-            // Convert detailed employee models to simplified EmployeeInfo objects
+            // Convert detailed employee models to simplified EmployeeInfo objects with named list IDs
             val result = employees.mapNotNull { employee ->
                 val email = employee.email
                 
                 // Skip entries without email
                 if (email.isBlank()) return@mapNotNull null
                 
-                // Convert to our simple EmployeeInfo model
+                // First convert to SimpleEmployeeInfo with named list enrichment
+                val simpleInfo = client.convertToSimpleEmployeeInfo(
+                    employee = employee,
+                    enrichWithNamedLists = true,
+                    debugLogger = { message -> LOG.debug(message) },
+                    errorLogger = { message, error -> LOG.warn(message, error) }
+                )
+                
+                // Then convert to our internal EmployeeInfo model
                 EmployeeInfo(
                     email = email,
-                    name = employee.displayName,
-                    team = employee.work?.department ?: "",
-                    title = employee.work?.title ?: "",
-                    manager = employee.work?.reportsTo?.displayName ?: ""
+                    name = simpleInfo.name,
+                    team = simpleInfo.team,
+                    title = simpleInfo.title,
+                    manager = simpleInfo.manager,
+                    departmentId = simpleInfo.departmentId,
+                    titleId = simpleInfo.titleId,
+                    siteId = simpleInfo.siteId,
+                    teamId = simpleInfo.teamId
                 )
             }
             
@@ -325,6 +347,11 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
             val client = HiBobApiClient(getBaseUrl(), token)
             
             LOG.info("Fetching employee info for $email from HiBob API")
+            // Pre-load named lists for enrichment
+            client.fetchNamedLists(
+                debugLogger = { message -> LOG.debug(message) },
+                errorLogger = { message, error -> LOG.warn(message, error) }
+            )
             
             // Use our shared API client to fetch the employee
             val employee = client.fetchEmployeeByEmail(
@@ -333,13 +360,24 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
                 errorLogger = { message, error -> LOG.warn(message, error) }
             ) ?: return null
             
-            // Convert to our model
+            // Convert to our model with named list enrichment
+            val simpleEmployeeInfo = client.convertToSimpleEmployeeInfo(
+                employee = employee,
+                enrichWithNamedLists = true,
+                debugLogger = { message -> LOG.debug(message) },
+                errorLogger = { message, error -> LOG.warn(message, error) }
+            )
+            
+            // Map to our internal EmployeeInfo model
             val employeeInfo = EmployeeInfo(
                 email = email,
-                name = employee.displayName,
-                team = employee.work?.department ?: "",
-                title = employee.work?.title ?: "",
-                manager = employee.work?.reportsTo?.displayName ?: ""
+                name = simpleEmployeeInfo.name,
+                team = simpleEmployeeInfo.team,
+                title = simpleEmployeeInfo.title,
+                manager = simpleEmployeeInfo.manager,
+                departmentId = simpleEmployeeInfo.departmentId,
+                titleId = simpleEmployeeInfo.titleId,
+                siteId = simpleEmployeeInfo.siteId
             )
             
             // Store in cache with timestamp
@@ -382,7 +420,11 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
         val team: String,
         val title: String,
         val manager: String,
-        val timestamp: String
+        val timestamp: String,
+        val departmentId: String? = null,
+        val titleId: String? = null,
+        val siteId: String? = null,
+        val teamId: String? = null
     ) {
         fun toEmployeeInfo(): EmployeeInfo {
             return EmployeeInfo(
@@ -390,7 +432,11 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
                 name = name,
                 team = team,
                 title = title,
-                manager = manager
+                manager = manager,
+                departmentId = departmentId,
+                titleId = titleId,
+                siteId = siteId,
+                teamId = teamId
             )
         }
     }
@@ -404,5 +450,9 @@ data class EmployeeInfo(
     val name: String,
     val team: String,
     val title: String,
-    val manager: String
+    val manager: String,
+    val departmentId: String? = null,
+    val titleId: String? = null,
+    val siteId: String? = null,
+    val teamId: String? = null
 )

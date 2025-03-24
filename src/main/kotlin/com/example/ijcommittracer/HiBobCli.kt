@@ -130,9 +130,9 @@ object HiBobCli {
         println("- ID: ${employee.id}")
         println("- Name: ${employee.name}")
         println("- Email: ${employee.email}")
-        println("- Team: ${employee.team}")
-        println("- Title: ${employee.title}")
-        println("- Site: ${employee.site ?: "Not specified"}")
+        println("- Team: ${employee.team}${employee.departmentId?.let { " (ID: $it)" } ?: ""}")
+        println("- Title: ${employee.title}${employee.titleId?.let { " (ID: $it)" } ?: ""}")
+        println("- Site: ${employee.site ?: "Not specified"}${employee.siteId?.let { " (ID: $it)" } ?: ""}")
         println("- Manager: ${employee.manager.ifEmpty { "None" }}")
         println("- Manager Email: ${employee.managerEmail ?: "None"}")
         println("- Start Date: ${employee.startDate ?: "Not specified"}")
@@ -158,8 +158,21 @@ object HiBobCli {
             }
         }
         
+        // First, pre-load named lists for enrichment
+        apiClient.fetchNamedLists(debugLogger = debugLogger, errorLogger = errorLogger)
+        
+        // Then fetch the employee
         val employee = apiClient.fetchEmployeeByEmail(email, debugLogger, errorLogger)
-        return@withContext employee?.let { apiClient.convertToSimpleEmployeeInfo(it) }
+        
+        // Convert and enrich with named list IDs
+        return@withContext employee?.let { 
+            apiClient.convertToSimpleEmployeeInfo(
+                employee = it,
+                enrichWithNamedLists = true,
+                debugLogger = debugLogger,
+                errorLogger = errorLogger
+            )
+        }
     }
     
     /**
@@ -179,8 +192,21 @@ object HiBobCli {
             }
         }
         
+        // First, pre-load named lists for enrichment
+        apiClient.fetchNamedLists(debugLogger = debugLogger, errorLogger = errorLogger)
+        
+        // Then fetch all employees
         val employees = apiClient.fetchAllEmployees(debugLogger, errorLogger)
-        return@withContext employees.map { apiClient.convertToSimpleEmployeeInfo(it) }
+        
+        // Convert and enrich with named list IDs
+        return@withContext employees.map { 
+            apiClient.convertToSimpleEmployeeInfo(
+                employee = it, 
+                enrichWithNamedLists = true,
+                debugLogger = debugLogger, 
+                errorLogger = errorLogger
+            )
+        }
     }
     
     /**

@@ -148,7 +148,13 @@ data class SimpleEmployeeInfo(
     val startDate: String? = null,
     val tenure: String? = null,
     val isManager: Boolean = false,
-    val avatarUrl: String? = null
+    val avatarUrl: String? = null,
+    
+    // ID fields for named lists lookup
+    val departmentId: String? = null,
+    val titleId: String? = null,
+    val siteId: String? = null,
+    val teamId: String? = null
 ) {
     companion object {
         fun fromHiBobEmployee(employee: HiBobEmployee): SimpleEmployeeInfo {
@@ -164,7 +170,8 @@ data class SimpleEmployeeInfo(
                 startDate = employee.work?.startDate,
                 tenure = employee.work?.tenureDuration?.humanize,
                 isManager = employee.work?.isManager ?: false,
-                avatarUrl = employee.avatarUrl
+                avatarUrl = employee.avatarUrl,
+                siteId = employee.work?.siteId?.toString()
             )
         }
     }
