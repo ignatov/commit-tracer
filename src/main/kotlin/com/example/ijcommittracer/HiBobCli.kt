@@ -1,7 +1,7 @@
 package com.example.ijcommittracer
 
 import com.example.ijcommittracer.services.EmployeeInfo
-import com.example.ijcommittracer.util.EnvFileReader
+import com.example.ijcommittracer.util.SimpleEnvFileReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -49,7 +49,7 @@ object HiBobCli {
             }
             envFile != null -> {
                 println("Reading token from $envFile")
-                val reader = EnvFileReader.getInstance(File(envFile).absolutePath)
+                val reader = SimpleEnvFileReader.getInstance(File(envFile).absolutePath)
                 reader.getProperty(HIBOB_API_TOKEN_KEY) ?: ""
             }
             System.getenv(HIBOB_API_TOKEN_KEY) != null -> {
