@@ -37,6 +37,9 @@ object HiBobCli {
         val tokenArg = args.firstOrNull { it.startsWith("token=") }?.substringAfter("token=")
         val envFile = args.firstOrNull { it.endsWith(".env") }
         isDebugMode = args.any { it == "--debug" || it == "-d" }
+        val listCommand = args.any { it == "--lists" || it == "-l" }
+        val listName = args.firstOrNull { it.startsWith("--list=") }?.substringAfter("--list=")
+        val findItem = args.firstOrNull { it.startsWith("--find=") }?.substringAfter("--find=")
         
         // Get token from arguments, .env file, or environment variables
         val token = when {
@@ -55,7 +58,7 @@ object HiBobCli {
             }
             else -> {
                 println("No HiBob token found. Please provide one via command line (token=XXX), .env file, or environment variable.")
-                println("Usage: java -jar hibob-cli.jar [email@example.com] [https://api.hibob.com/v1] [token=XXX] [/path/to/.env] [--debug|-d]")
+                println("Usage: java -jar hibob-cli.jar [email@example.com] [https://api.hibob.com/v1] [token=XXX] [/path/to/.env] [--debug|-d] [--lists] [--list=LIST_NAME] [--find=ITEM_NAME]")
                 return
             }
         }
@@ -74,6 +77,12 @@ object HiBobCli {
         // Run in a blocking coroutine to fetch data asynchronously
         runBlocking {
             try {
+                // Handle named lists command
+                if (listCommand || listName != null) {
+                    fetchAndDisplayNamedLists(apiClient, listName, findItem)
+                    return@runBlocking
+                }
+                
                 if (email != null) {
                     // Fetch single employee by email
                     val employee = fetchEmployeeByEmail(email, apiClient)
@@ -172,6 +181,102 @@ object HiBobCli {
         
         val employees = apiClient.fetchAllEmployees(debugLogger, errorLogger)
         return@withContext employees.map { apiClient.convertToSimpleEmployeeInfo(it) }
+    }
+    
+    /**
+     * Fetches and displays named lists from HiBob API
+     */
+    private suspend fun fetchAndDisplayNamedLists(
+        apiClient: HiBobApiClient,
+        specificListName: String?,
+        findItemText: String?
+    ) = withContext(Dispatchers.IO) {
+        val debugLogger: (String) -> Unit = { message ->
+            if (isDebugMode) println("[DEBUG] $message")
+        }
+        
+        val errorLogger: (String, Throwable?) -> Unit = { message, error ->
+            println(message)
+            if (isDebugMode && error != null) {
+                error.printStackTrace()
+            }
+        }
+        
+        println("\nFetching named lists from HiBob API...")
+        
+        // Show a specific list in detail
+        if (specificListName != null) {
+            val namedList = apiClient.findNamedListByName(specificListName, debugLogger = debugLogger, errorLogger = errorLogger)
+            
+            if (namedList == null) {
+                println("No list found with name '$specificListName'")
+                return@withContext
+            }
+            
+            println("\nNamed List: ${namedList.name}")
+            println("Total Items: ${namedList.values.size}")
+            
+            // Find a specific item within the list
+            if (findItemText != null) {
+                val item = apiClient.findNamedListItem(
+                    listName = specificListName,
+                    itemText = findItemText,
+                    debugLogger = debugLogger,
+                    errorLogger = errorLogger
+                )
+                
+                if (item == null) {
+                    println("No item found with name/value '$findItemText' in list '${namedList.name}'")
+                } else {
+                    println("\nFound Item:")
+                    println("- ID: ${item.id}")
+                    println("- Value: ${item.value}")
+                    println("- Name: ${item.name}")
+                    println("- Archived: ${item.archived}")
+                    if (item.children.isNotEmpty()) {
+                        println("- Children: ${item.children.size}")
+                    }
+                }
+                
+                return@withContext
+            }
+            
+            // Print all items in the list
+            println("\nItems:")
+            namedList.values.forEachIndexed { index, item ->
+                println("\nItem #${index + 1}:")
+                println("- ID: ${item.id}")
+                println("- Value: ${item.value}")
+                println("- Name: ${item.name}")
+                println("- Archived: ${item.archived}")
+                if (item.children.isNotEmpty()) {
+                    println("- Children: ${item.children.size}")
+                    
+                    // Print first level of children
+                    item.children.forEachIndexed { childIndex, child ->
+                        println("  - Child #${childIndex + 1}: ${child.name} (ID: ${child.id})")
+                    }
+                }
+            }
+            
+            return@withContext
+        }
+        
+        // Show all available lists
+        val namedLists = apiClient.fetchNamedLists(debugLogger = debugLogger, errorLogger = errorLogger)
+        
+        if (namedLists.isEmpty()) {
+            println("No named lists found.")
+            return@withContext
+        }
+        
+        println("\nFound ${namedLists.size} named lists:")
+        namedLists.forEachIndexed { index, list ->
+            println("${index + 1}. ${list.name} (${list.values.size} items)")
+        }
+        
+        println("\nTo view a specific list, use --list=LIST_NAME")
+        println("To find a specific item, use --list=LIST_NAME --find=ITEM_NAME")
     }
 }
 

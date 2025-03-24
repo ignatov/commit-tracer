@@ -85,6 +85,14 @@ tasks {
         args = listOf("--debug")
     }
     
+    // Task to list named lists from HiBob
+    register<JavaExec>("hibobLists") {
+        description = "Lists all named lists from HiBob API"
+        mainClass.set("com.example.ijcommittracer.HiBobCliKt")
+        classpath = sourceSets["main"].runtimeClasspath
+        args = listOf("--lists", "--debug")
+    }
+    
     // Task to create a standalone JAR for HiBobCli
     register<Jar>("hibobCliJar") {
         dependsOn(configurations.runtimeClasspath)

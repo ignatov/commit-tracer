@@ -169,3 +169,23 @@ data class SimpleEmployeeInfo(
         }
     }
 }
+
+/**
+ * Named list model for HiBob API
+ * Represents configurable lists in HiBob like departments, teams, etc.
+ */
+@Serializable
+data class NamedList(
+    val name: String,
+    @SerialName("items")
+    val values: List<Item> = emptyList()
+) {
+    @Serializable
+    data class Item(
+        val id: String,
+        val value: String,
+        val name: String,
+        val archived: Boolean = false,
+        val children: List<Item> = emptyList()
+    )
+}
