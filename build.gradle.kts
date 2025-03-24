@@ -62,4 +62,33 @@ tasks {
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         kotlinOptions.jvmTarget = "21"
     }
+    
+    // Task to run the HiBob CLI
+    register<JavaExec>("runHiBobCli") {
+        description = "Runs the HiBob CLI application"
+        mainClass.set("com.example.ijcommittracer.HiBobCli")
+        classpath = sourceSets["main"].runtimeClasspath
+        
+        // Pass command line arguments to the application
+        args = project.findProperty("cliArgs")?.toString()?.split(" ") ?: listOf()
+    }
+    
+    // Task to create a standalone JAR for HiBobCli
+    register<Jar>("hibobCliJar") {
+        dependsOn(configurations.runtimeClasspath)
+        archiveBaseName.set("hibob-cli")
+        archiveVersion.set(project.version.toString())
+        
+        manifest {
+            attributes["Main-Class"] = "com.example.ijcommittracer.HiBobCli"
+        }
+        
+        // Include all dependencies in the JAR
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+        from(sourceSets["main"].output)
+        
+        // Exclude unnecessary files from the JAR
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/MANIFEST.MF")
+    }
 }
