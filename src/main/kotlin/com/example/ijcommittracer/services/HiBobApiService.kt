@@ -1,23 +1,16 @@
 package com.example.ijcommittracer.services
 
-import com.example.ijcommittracer.models.HiBobResponse
-import com.example.ijcommittracer.models.HiBobSearchRequest
+import com.example.ijcommittracer.api.HiBobApiClient
 import com.example.ijcommittracer.util.EnvFileReader
 import com.intellij.openapi.components.*
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /**
  * Service for interacting with HiBob API to fetch employee information.
@@ -36,20 +29,13 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
     private val DEFAULT_HIBOB_API_URL = "https://api.hibob.com/v1"
     
     private val inMemoryCache = ConcurrentHashMap<String, CachedEmployeeInfo>()
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
-        
-    // Create a lenient JSON parser that can handle malformed JSON
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        coerceInputValues = true
-    }
-    
     private val LOG = logger<HiBobApiService>()
     private val tokenStorage = TokenStorageService.getInstance(project)
+    
+    // Lazy initialization of the API client
+    private val apiClient by lazy { 
+        HiBobApiClient(getBaseUrl(), getToken() ?: "")
+    }
     
     // State object for persistent storage
     private var myState = HiBobState()
@@ -294,40 +280,19 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
      */
     private fun fetchAllEmployeesFromApi(token: String): List<EmployeeInfo> {
         try {
-            val baseUrl = getBaseUrl()
-            
-            // Create JSON payload for the search request
-            val searchRequest = HiBobSearchRequest(showInactive = false)
-            val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
-            LOG.debug("Request payload: $requestJson")
-            
-            val requestBody = requestJson.toRequestBody("application/json".toMediaType())
-            
-            val request = Request.Builder()
-                .url("$baseUrl/people/search")
-                .post(requestBody)
-                .addHeader("authorization", "Basic $token")
-                .addHeader("accept", "application/json")
-                .addHeader("content-type", "application/json")
-                .build()
+            // Re-initialize the API client with the provided token
+            val client = HiBobApiClient(getBaseUrl(), token)
             
             LOG.info("Fetching all employees from HiBob API")
-            val response = client.newCall(request).execute()
             
-            if (!response.isSuccessful) {
-                LOG.warn("HiBob API request failed with status: ${response.code}")
-                response.body?.string()?.let { LOG.debug("Error response: $it") }
-                return emptyList()
-            }
-            
-            val responseBody = response.body?.string() ?: return emptyList()
-            LOG.debug("Response received from HiBob API")
-            
-            // Parse the response using kotlinx.serialization
-            val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
+            // Use our shared API client to fetch all employees
+            val employees = client.fetchAllEmployees(
+                debugLogger = { message -> LOG.debug(message) },
+                errorLogger = { message, error -> LOG.warn(message, error) }
+            )
             
             // Convert detailed employee models to simplified EmployeeInfo objects
-            val result = hibobResponse.employees.mapNotNull { employee ->
+            val result = employees.mapNotNull { employee ->
                 val email = employee.email
                 
                 // Skip entries without email
@@ -356,45 +321,19 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
      */
     private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
         try {
-            val baseUrl = getBaseUrl()
-            
-            // Create JSON payload for the search request with specific email filter
-            val searchRequest = HiBobSearchRequest(showInactive = false, email = email)
-            val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
-            LOG.debug("Request payload: $requestJson")
-            
-            val requestBody = requestJson.toRequestBody("application/json".toMediaType())
-            
-            val request = Request.Builder()
-                .url("$baseUrl/people/search")
-                .post(requestBody)
-                .addHeader("authorization", "Basic $token")
-                .addHeader("accept", "application/json")
-                .addHeader("content-type", "application/json")
-                .build()
+            // Re-initialize the API client with the provided token
+            val client = HiBobApiClient(getBaseUrl(), token)
             
             LOG.info("Fetching employee info for $email from HiBob API")
-            val response = client.newCall(request).execute()
             
-            if (!response.isSuccessful) {
-                LOG.warn("HiBob API request failed with status: ${response.code}")
-                response.body?.string()?.let { LOG.debug("Error response: $it") }
-                return null
-            }
-            
-            val responseBody = response.body?.string() ?: return null
-            LOG.debug("Response received from HiBob API")
-            
-            // Parse the response using kotlinx.serialization
-            val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
-            
-            if (hibobResponse.employees.isEmpty()) {
-                LOG.info("No employee found with email $email")
-                return null
-            }
+            // Use our shared API client to fetch the employee
+            val employee = client.fetchEmployeeByEmail(
+                email = email,
+                debugLogger = { message -> LOG.debug(message) },
+                errorLogger = { message, error -> LOG.warn(message, error) }
+            ) ?: return null
             
             // Convert to our model
-            val employee = hibobResponse.employees.first()
             val employeeInfo = EmployeeInfo(
                 email = email,
                 name = employee.displayName,

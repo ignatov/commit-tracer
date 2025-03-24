@@ -1,21 +1,14 @@
 package com.example.ijcommittracer
 
-import com.example.ijcommittracer.models.HiBobResponse
-import com.example.ijcommittracer.models.HiBobSearchRequest
+import com.example.ijcommittracer.api.HiBobApiClient
 import com.example.ijcommittracer.models.SimpleEmployeeInfo
 import com.example.ijcommittracer.services.EmployeeInfo
 import com.example.ijcommittracer.util.SimpleEnvFileReader
-import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.time.LocalDateTime
-import java.util.concurrent.TimeUnit
 
 /**
  * Command-line interface for HiBob API interactions.
@@ -26,18 +19,9 @@ object HiBobCli {
     private const val HIBOB_API_TOKEN_KEY = "HIBOB_API_TOKEN"
     private const val HIBOB_API_URL_KEY = "HIBOB_API_URL"
     private const val DEFAULT_HIBOB_API_URL = "https://api.hibob.com/v1"
-
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
-        
-    // Create a lenient JSON parser that can handle malformed JSON
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        coerceInputValues = true
-    }
+    
+    // Debug flag for verbose output
+    private var isDebugMode = false
 
     /**
      * Main entry point for CLI application
@@ -52,7 +36,7 @@ object HiBobCli {
         val baseUrl = args.firstOrNull { it.startsWith("http") } ?: DEFAULT_HIBOB_API_URL
         val tokenArg = args.firstOrNull { it.startsWith("token=") }?.substringAfter("token=")
         val envFile = args.firstOrNull { it.endsWith(".env") }
-        val debug = args.any { it == "--debug" || it == "-d" }
+        isDebugMode = args.any { it == "--debug" || it == "-d" }
         
         // Get token from arguments, .env file, or environment variables
         val token = when {
@@ -84,12 +68,15 @@ object HiBobCli {
 
         println("\nUsing HiBob API URL: $baseUrl")
         
+        // Create an instance of our API client
+        val apiClient = HiBobApiClient(baseUrl, token)
+        
         // Run in a blocking coroutine to fetch data asynchronously
         runBlocking {
             try {
                 if (email != null) {
                     // Fetch single employee by email
-                    val employee = fetchEmployeeByEmail(email, token, baseUrl, debug)
+                    val employee = fetchEmployeeByEmail(email, apiClient)
                     if (employee != null) {
                         println("\nEmployee information for $email:")
                         printEmployee(employee)
@@ -99,7 +86,7 @@ object HiBobCli {
                 } else {
                     // Fetch all employees
                     println("\nFetching all employees...")
-                    val employees = fetchAllEmployees(token, baseUrl, debug)
+                    val employees = fetchAllEmployees(apiClient)
                     println("Found ${employees.size} employees")
                     
                     if (employees.isNotEmpty()) {
@@ -120,7 +107,7 @@ object HiBobCli {
                 }
             } catch (e: Exception) {
                 println("\nError fetching employee data: ${e.message}")
-                if (debug) {
+                if (isDebugMode) {
                     e.printStackTrace()
                 }
             }
@@ -145,127 +132,46 @@ object HiBobCli {
     }
     
     /**
-     * Fetches a single employee by email using POST search endpoint
+     * Fetches a single employee by email using the shared API client
      */
     private suspend fun fetchEmployeeByEmail(
-        email: String, 
-        token: String, 
-        baseUrl: String,
-        debug: Boolean = false
+        email: String,
+        apiClient: HiBobApiClient
     ): SimpleEmployeeInfo? = withContext(Dispatchers.IO) {
-        try {
-            // Create search request object and convert to JSON
-            val searchRequest = HiBobSearchRequest(showInactive = false, email = email)
-            val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
-            
-            if (debug) {
-                println("Request payload: $requestJson")
-            }
-            
-            val requestBody = requestJson.toRequestBody("application/json".toMediaType())
-            
-            val request = Request.Builder()
-                .url("$baseUrl/people/search")
-                .post(requestBody)
-                .addHeader("authorization", "Basic $token")
-                .addHeader("accept", "application/json")
-                .addHeader("content-type", "application/json")
-                .build()
-            
-            println("Fetching employee with email $email...")
-            val response = client.newCall(request).execute()
-            
-            if (!response.isSuccessful) {
-                println("API request failed with status: ${response.code}")
-                if (response.body != null) {
-                    println("Error response: ${response.body?.string()}")
-                }
-                return@withContext null
-            }
-            
-            val responseBody = response.body?.string() ?: return@withContext null
-            
-            if (debug) {
-                println("Response body: $responseBody")
-            }
-            
-            // Parse the response using kotlinx.serialization
-            val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
-            
-            if (hibobResponse.employees.isEmpty()) {
-                println("No employee found with email $email")
-                return@withContext null
-            }
-            
-            // Convert to simplified model
-            return@withContext SimpleEmployeeInfo.fromHiBobEmployee(hibobResponse.employees.first())
-        } catch (e: Exception) {
-            println("Error fetching employee: ${e.message}")
-            if (debug) {
-                e.printStackTrace()
-            }
-            return@withContext null
+        val debugLogger: (String) -> Unit = { message ->
+            if (isDebugMode) println("[DEBUG] $message")
         }
+        
+        val errorLogger: (String, Throwable?) -> Unit = { message, error ->
+            println(message)
+            if (isDebugMode && error != null) {
+                error.printStackTrace()
+            }
+        }
+        
+        val employee = apiClient.fetchEmployeeByEmail(email, debugLogger, errorLogger)
+        return@withContext employee?.let { apiClient.convertToSimpleEmployeeInfo(it) }
     }
     
     /**
-     * Fetches all employees from HiBob API using the POST search endpoint
+     * Fetches all employees using the shared API client
      */
     private suspend fun fetchAllEmployees(
-        token: String, 
-        baseUrl: String,
-        debug: Boolean = false
+        apiClient: HiBobApiClient
     ): List<SimpleEmployeeInfo> = withContext(Dispatchers.IO) {
-        try {
-            // Create search request object and convert to JSON
-            val searchRequest = HiBobSearchRequest(showInactive = false)
-            val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
-            
-            if (debug) {
-                println("Request payload: $requestJson")
-            }
-            
-            val requestBody = requestJson.toRequestBody("application/json".toMediaType())
-            
-            val request = Request.Builder()
-                .url("$baseUrl/people/search")
-                .post(requestBody)
-                .addHeader("authorization", "Basic $token")
-                .addHeader("accept", "application/json")
-                .addHeader("content-type", "application/json")
-                .build()
-            
-            println("Fetching employees from $baseUrl/people/search...")
-            val response = client.newCall(request).execute()
-            
-            if (!response.isSuccessful) {
-                println("API request failed with status: ${response.code}")
-                if (response.body != null) {
-                    println("Error response: ${response.body?.string()}")
-                }
-                return@withContext emptyList()
-            }
-            
-            val responseBody = response.body?.string() ?: return@withContext emptyList()
-            
-            if (debug) {
-                println("Response body: $responseBody")
-            }
-            
-            // Parse the response using kotlinx.serialization
-            val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
-            
-            // Convert to simplified models
-            return@withContext hibobResponse.employees.map { employee ->
-                SimpleEmployeeInfo.fromHiBobEmployee(employee)
-            }
-        } catch (e: Exception) {
-            println("Error fetching employees: ${e.message}")
-            if (debug) {
-                e.printStackTrace()
-            }
-            return@withContext emptyList()
+        val debugLogger: (String) -> Unit = { message ->
+            if (isDebugMode) println("[DEBUG] $message")
         }
+        
+        val errorLogger: (String, Throwable?) -> Unit = { message, error ->
+            println(message)
+            if (isDebugMode && error != null) {
+                error.printStackTrace()
+            }
+        }
+        
+        val employees = apiClient.fetchAllEmployees(debugLogger, errorLogger)
+        return@withContext employees.map { apiClient.convertToSimpleEmployeeInfo(it) }
     }
 }
 
