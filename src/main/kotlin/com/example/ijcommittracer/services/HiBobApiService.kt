@@ -1,6 +1,10 @@
 package com.example.ijcommittracer.services
 
+import com.example.ijcommittracer.models.HiBobResponse
+import com.example.ijcommittracer.models.HiBobSearchRequest
+import com.example.ijcommittracer.models.SimpleEmployeeInfo
 import com.example.ijcommittracer.util.EnvFileReader
+import com.google.gson.Gson
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
@@ -10,9 +14,11 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
@@ -40,6 +46,11 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+        
+    // Create a more lenient Gson instance that can handle malformed JSON
+    private val gson = Gson().newBuilder()
+        .setLenient()
+        .create()
     
     private val LOG = logger<HiBobApiService>()
     private val tokenStorage = TokenStorageService.getInstance(project)
@@ -280,89 +291,116 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
     }
     
     /**
-     * Fetch all employees from HiBob API.
+     * Fetch all employees from HiBob API using the search endpoint.
      */
     private fun fetchAllEmployeesFromApi(token: String): List<EmployeeInfo> {
         val baseUrl = getBaseUrl()
         
+        // Create JSON payload for the search request
+        val searchRequest = HiBobSearchRequest(showInactive = false)
+        val requestJson = gson.toJson(searchRequest)
+        val requestBody = requestJson.toRequestBody("application/json".toMediaType())
+        
         val request = Request.Builder()
-            .url("$baseUrl/people")
-            .header("Authorization", "Bearer $token")
-            .header("Accept", "application/json")
+            .url("$baseUrl/people/search")
+            .post(requestBody)
+            .addHeader("authorization", "Basic $token")
+            .addHeader("accept", "application/json")
+            .addHeader("content-type", "application/json")
             .build()
         
+        LOG.info("Fetching all employees from HiBob API")
         val response = client.newCall(request).execute()
         
         if (!response.isSuccessful) {
             LOG.warn("HiBob API request failed with status: ${response.code}")
+            response.body?.string()?.let { LOG.debug("Error response: $it") }
             return emptyList()
         }
         
         val responseBody = response.body?.string() ?: return emptyList()
-        val jsonObject = JSONObject(responseBody)
         
-        // Parse the response
-        val employeesArray = jsonObject.optJSONArray("employees") ?: return emptyList()
-        
-        val result = mutableListOf<EmployeeInfo>()
-        
-        for (i in 0 until employeesArray.length()) {
-            val employee = employeesArray.getJSONObject(i)
-            val email = employee.optString("email", "")
+        try {
+            // Parse the response using Gson
+            val hibobResponse = gson.fromJson(responseBody, HiBobResponse::class.java)
             
-            // Skip entries without email
-            if (email.isBlank()) continue
+            // Convert detailed employee models to simplified EmployeeInfo objects
+            val result = hibobResponse.employees.mapNotNull { employee ->
+                val email = employee.email
+                
+                // Skip entries without email
+                if (email.isBlank()) return@mapNotNull null
+                
+                // Convert to our simple EmployeeInfo model
+                EmployeeInfo(
+                    email = email,
+                    name = employee.displayName,
+                    team = employee.work?.department ?: "",
+                    title = employee.work?.title ?: "",
+                    manager = employee.work?.reportsTo?.displayName ?: ""
+                )
+            }
             
-            result.add(EmployeeInfo(
-                email = email,
-                name = employee.optString("displayName", ""),
-                team = employee.optString("department", ""),
-                title = employee.optString("title", ""),
-                manager = employee.optString("managerEmail", "")
-            ))
+            LOG.info("Successfully fetched ${result.size} employees from HiBob API")
+            return result
+        } catch (e: Exception) {
+            LOG.error("Failed to parse HiBob API response", e)
+            return emptyList()
         }
-        
-        return result
     }
     
     /**
-     * Fetch employee information from HiBob API.
+     * Fetch employee information from HiBob API using the search endpoint.
      */
     private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
         val baseUrl = getBaseUrl()
         
+        // Create JSON payload for the search request with specific email filter
+        val searchRequest = HiBobSearchRequest(showInactive = false, email = email)
+        val requestJson = gson.toJson(searchRequest)
+        val requestBody = requestJson.toRequestBody("application/json".toMediaType())
+        
         val request = Request.Builder()
-            .url("$baseUrl/people?email=$email")
-            .header("Authorization", "Bearer $token")
-            .header("Accept", "application/json")
+            .url("$baseUrl/people/search")
+            .post(requestBody)
+            .addHeader("authorization", "Basic $token")
+            .addHeader("accept", "application/json")
+            .addHeader("content-type", "application/json")
             .build()
         
+        LOG.info("Fetching employee info for $email from HiBob API")
         val response = client.newCall(request).execute()
         
         if (!response.isSuccessful) {
             LOG.warn("HiBob API request failed with status: ${response.code}")
+            response.body?.string()?.let { LOG.debug("Error response: $it") }
             return null
         }
         
         val responseBody = response.body?.string() ?: return null
-        val jsonObject = JSONObject(responseBody)
         
-        // Parse the response - HiBob API might return an array or a single object
-        val employeesArray = jsonObject.optJSONArray("employees") ?: return null
-        
-        if (employeesArray.length() == 0) {
+        try {
+            // Parse the response using Gson
+            val hibobResponse = gson.fromJson(responseBody, HiBobResponse::class.java)
+            
+            if (hibobResponse.employees.isEmpty()) {
+                LOG.info("No employee found with email $email")
+                return null
+            }
+            
+            val employee = hibobResponse.employees.first()
+            
+            return EmployeeInfo(
+                email = email,
+                name = employee.displayName,
+                team = employee.work?.department ?: "",
+                title = employee.work?.title ?: "",
+                manager = employee.work?.reportsTo?.displayName ?: ""
+            )
+        } catch (e: Exception) {
+            LOG.error("Failed to parse HiBob API response for employee $email", e)
             return null
         }
-        
-        val employee = employeesArray.getJSONObject(0)
-        
-        return EmployeeInfo(
-            email = email,
-            name = employee.optString("displayName", ""),
-            team = employee.optString("department", ""),
-            title = employee.optString("title", ""),
-            manager = employee.optString("managerEmail", "")
-        )
     }
     
     companion object {

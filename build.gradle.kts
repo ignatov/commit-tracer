@@ -31,6 +31,9 @@ dependencies {
     // Add OkHttp dependency for HiBob API
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     
+    // Add Gson for JSON serialization/deserialization
+    implementation("com.google.code.gson:gson:2.10.1")
+    
     // Add Kotlin coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.7.3")
@@ -71,6 +74,13 @@ tasks {
         
         // Pass command line arguments to the application
         args = project.findProperty("cliArgs")?.toString()?.split(" ") ?: listOf()
+    }
+    
+    // Task to run the HiBob CLI Test
+    register<JavaExec>("runHiBobCliTest") {
+        description = "Runs the HiBob CLI Test application"
+        mainClass.set("com.example.ijcommittracer.HiBobCliTestKt")
+        classpath = sourceSets["main"].runtimeClasspath
     }
     
     // Task to create a standalone JAR for HiBobCli
