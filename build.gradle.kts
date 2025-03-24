@@ -30,7 +30,7 @@ dependencies {
     implementation("org.json:json:20240205")
     
     // Add OkHttp dependency for HiBob API
-    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     
     // Add Kotlin serialization for JSON handling
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
