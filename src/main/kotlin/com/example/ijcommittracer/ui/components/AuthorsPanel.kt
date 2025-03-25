@@ -871,6 +871,9 @@ class AuthorsPanel(
         var totalBlockers = 0
         var totalRegressions = 0
         
+        // Collect visible commit counts for median calculation
+        val visibleCommitCounts = mutableListOf<Int>()
+        
         for (viewRow in 0 until visibleRowCount) {
             val modelRow = authorsTable.convertRowIndexToModel(viewRow)
             val author = authorStats.values.toList()[modelRow]
@@ -879,12 +882,59 @@ class AuthorsPanel(
             totalTickets += author.youTrackTickets.size
             totalBlockers += author.blockerTickets.size
             totalRegressions += author.regressionTickets.size
+            
+            // Add to list for median calculation
+            visibleCommitCounts.add(author.commitCount)
         }
         
-        // Get parent window title bar and update it with filtered stats
+        // Calculate average commits per author
+        val avgCommitsPerAuthor = if (visibleRowCount > 0) {
+            String.format("%.2f", totalCommits.toDouble() / visibleRowCount)
+        } else {
+            "0.00"
+        }
+        
+        // Calculate median commits per author
+        val medianCommitsPerAuthor = if (visibleCommitCounts.isNotEmpty()) {
+            val sortedCounts = visibleCommitCounts.sorted()
+            val middle = sortedCounts.size / 2
+            
+            if (sortedCounts.size % 2 == 0) {
+                // Even number of elements, average the middle two
+                val median = (sortedCounts[middle - 1] + sortedCounts[middle]) / 2.0
+                String.format("%.1f", median)
+            } else {
+                // Odd number of elements, take the middle one
+                sortedCounts[middle].toString()
+            }
+        } else {
+            "0"
+        }
+        
+        // Update the average and median labels in parent dialog if we can find them
         val parentWindow = SwingUtilities.getWindowAncestor(this)
         if (parentWindow != null && parentWindow is JDialog) {
-            // Parse the existing title to preserve repository name
+            // Find the statistics labels by traversing components
+            SwingUtilities.invokeLater {
+                val components = parentWindow.contentPane.components
+                for (component in components) {
+                    if (component is JComponent) {
+                        // Look for labels containing "avg" and "median"
+                        val avgLabel = findLabelByTextContaining(component, "Avg commits")
+                        val medianLabel = findLabelByTextContaining(component, "Median commits")
+                        
+                        // Update labels if found
+                        avgLabel?.let { 
+                            it.text = CommitTracerBundle.message("dialog.avg.commits.label", avgCommitsPerAuthor)
+                        }
+                        medianLabel?.let { 
+                            it.text = CommitTracerBundle.message("dialog.median.commits.label", medianCommitsPerAuthor)
+                        }
+                    }
+                }
+            }
+            
+            // Update the dialog title with filtered stats
             val existingTitle = parentWindow.title
             val repoName = if (existingTitle.contains(" - ")) {
                 " - " + existingTitle.substringAfter(" - ").substringBefore(":")
@@ -895,6 +945,28 @@ class AuthorsPanel(
             val filter = if (visibleRowCount < authorStats.size) " (Filtered)" else ""
             parentWindow.title = "Commit Statistics$repoName$filter: $visibleRowCount authors, $totalCommits commits, $totalTickets tickets"
         }
+    }
+    
+    /**
+     * Helper method to find a JLabel containing specific text
+     */
+    private fun findLabelByTextContaining(component: JComponent, textToFind: String): JBLabel? {
+        // Check if this component is a label with matching text
+        if (component is JBLabel && component.text?.contains(textToFind) == true) {
+            return component
+        }
+        
+        // Recursively search in child components
+        for (child in component.components) {
+            if (child is JComponent) {
+                val result = findLabelByTextContaining(child, textToFind)
+                if (result != null) {
+                    return result
+                }
+            }
+        }
+        
+        return null
     }
     
     /**
