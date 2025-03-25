@@ -56,9 +56,14 @@ class AuthorsPanel(
         val filterPanel = JPanel(BorderLayout())
         filterPanel.border = JBUI.Borders.emptyBottom(5)
         
+        // Create a panel for search and filter controls
+        val filtersContainer = JPanel(BorderLayout())
+        
+        // Search field with label
+        val searchPanel = JPanel(BorderLayout())
         val searchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
         searchLabel.border = JBUI.Borders.empty(0, 5)
-        filterPanel.add(searchLabel, BorderLayout.WEST)
+        searchPanel.add(searchLabel, BorderLayout.WEST)
         
         val searchField = JTextField().apply {
             // Add clear button (X) with escape key handler to clear the field
@@ -70,17 +75,27 @@ class AuthorsPanel(
                 }
             })
         }
-        filterPanel.add(searchField, BorderLayout.CENTER)
+        searchPanel.add(searchField, BorderLayout.CENTER)
+        filtersContainer.add(searchPanel, BorderLayout.NORTH)
+        
+        // Extract HiBob info presence for UI customization
+        val hasHiBobInfo = authorStats.values.any { 
+            it.teamName.isNotBlank() || it.displayName.isNotBlank() || it.title.isNotBlank() 
+        }
+        
+        // Add listener for enhanced search across all fields
+        searchField.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
+            override fun removeUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
+            override fun changedUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
+        })
+        
+        filterPanel.add(filtersContainer, BorderLayout.CENTER)
         add(filterPanel, BorderLayout.NORTH)
         
         // Create table with author statistics
         val authorList = authorStats.values.toList()
         val tableModel = AuthorTableModel(authorList)
-        
-        // Check if we have any non-empty team information
-        val hasHiBobInfo = authorList.any { 
-            it.teamName.isNotBlank() || it.displayName.isNotBlank() || it.title.isNotBlank() 
-        }
         
         authorsTable = JBTable(tableModel).apply {
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
@@ -268,28 +283,6 @@ class AuthorsPanel(
             sorter.toggleSortOrder(commitCountCol) // Toggle twice to get descending order
             
             rowSorter = sorter
-            
-            // Add document listener to filter table when text changes
-            searchField.document.addDocumentListener(object : DocumentListener {
-                override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
-                override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
-                override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
-                
-                private fun filterTable() {
-                    val text = searchField.text
-                    if (text.isNullOrBlank()) {
-                        sorter.rowFilter = null
-                    } else {
-                        try {
-                            // Create case-insensitive regex filter for author column (0)
-                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 0)
-                        } catch (ex: java.util.regex.PatternSyntaxException) {
-                            // If the regex pattern is invalid, just show all rows
-                            sorter.rowFilter = null
-                        }
-                    }
-                }
-            })
         }
         
         // Create tabbed panel for details
@@ -835,6 +828,57 @@ class AuthorsPanel(
         if (authorsTable.rowCount > 0) {
             authorsTable.selectionModel.setSelectionInterval(0, 0)
             authorsTable.scrollRectToVisible(authorsTable.getCellRect(0, 0, true))
+        }
+    }
+    
+    /**
+     * Applies a flexible text search filter that works across multiple columns
+     */
+    private fun applyFilter(searchField: JTextField) {
+        val text = searchField.text
+        val sorter = authorsTable.rowSorter as TableRowSorter<*>
+        
+        if (text.isBlank()) {
+            sorter.rowFilter = null
+        } else {
+            @Suppress("UNCHECKED_CAST")
+            sorter.rowFilter = createSearchFilter(text) as RowFilter<Any, Int>
+        }
+    }
+    
+    /**
+     * Creates a row filter that matches against email, name, team, and title
+     */
+    private fun createSearchFilter(text: String): RowFilter<Any, Any> {
+        return object : RowFilter<Any, Any>() {
+            override fun include(entry: Entry<out Any, out Any>): Boolean {
+                if (text.isBlank()) return true
+                
+                val searchTerms = text.lowercase()
+                
+                // First check author email (column 0)
+                val authorEmail = entry.getStringValue(0).lowercase()
+                if (authorEmail.contains(searchTerms)) return true
+                
+                // Check additional fields if they exist (name, team, title)
+                try {
+                    // Check name (column 4) if available
+                    val authorName = entry.getStringValue(4).lowercase()
+                    if (authorName.contains(searchTerms)) return true
+                    
+                    // Check team (column 5) if available
+                    val teamName = entry.getStringValue(5).lowercase()
+                    if (teamName.contains(searchTerms)) return true
+                    
+                    // Check title (column 6) if available
+                    val title = entry.getStringValue(6).lowercase()
+                    if (title.contains(searchTerms)) return true
+                } catch (ex: Exception) {
+                    // If columns don't exist or there's any error, we've already checked email
+                }
+                
+                return false
+            }
         }
     }
 }
