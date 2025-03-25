@@ -148,48 +148,12 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
             val responseBody = response.body?.string() ?: return emptyMap()
 
             // Try to parse as NamedListResponse
-            try {
-                val namedList = json.decodeFromString<NamedListResponse>(responseBody)
-                return namedList.values.flatMap { item ->
-                    buildMappingsFromItem(item)
-                }.toMap()
-            } catch (e: Exception) {
-                debugLogger?.invoke("Error parsing $logName response as NamedListResponse: ${e.message}")
-
-                // Try parsing as direct values list
-                try {
-                    val items = json.decodeFromString<List<NamedList.Item>>(responseBody)
-                    return items.flatMap { item ->
-                        buildMappingsFromItem(item)
-                    }.toMap()
-                } catch (e: Exception) {
-                    debugLogger?.invoke("Error parsing $logName response as List: ${e.message}")
-                    return emptyMap()
-                }
-            }
+            val namedList = json.decodeFromString<NamedListResponse>(responseBody)
+            return namedList.values.associate { item -> item.id to item.name }
         } catch (e: Exception) {
             errorLogger?.invoke("Error fetching $logName mappings: ${e.message}", e)
             return emptyMap()
         }
-    }
-
-    /**
-     * Recursively builds ID to name mappings from a named list item and its children
-     */
-    private fun buildMappingsFromItem(item: NamedList.Item): List<Pair<String, String>> {
-        val mappings = mutableListOf<Pair<String, String>>()
-
-        // Add this item
-        mappings.add(item.id to item.name)
-
-        // Process children recursively
-        if (item.children.isNotEmpty()) {
-            for (child in item.children) {
-                mappings.addAll(buildMappingsFromItem(child))
-            }
-        }
-
-        return mappings
     }
 
     /**
