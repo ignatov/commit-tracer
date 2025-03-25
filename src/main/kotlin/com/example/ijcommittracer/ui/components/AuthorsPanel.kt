@@ -37,7 +37,10 @@ import javax.swing.table.TableRowSorter
  */
 class AuthorsPanel(
     private val authorStats: Map<String, AuthorStats>,
-    private val commits: List<CommitInfo>
+    private val commits: List<CommitInfo>,
+    // Lambda to update statistics in parent dialog
+    private val updateStatsCallback: ((totalAuthors: Int, totalCommits: Int, totalTickets: Int, 
+                                      avgCommits: String, medianCommits: String) -> Unit)? = null
 ) : JPanel(BorderLayout()) {
     
     private lateinit var authorsTable: JBTable
@@ -911,62 +914,14 @@ class AuthorsPanel(
             "0"
         }
         
-        // Update the average and median labels in parent dialog if we can find them
-        val parentWindow = SwingUtilities.getWindowAncestor(this)
-        if (parentWindow != null && parentWindow is JDialog) {
-            // Find the statistics labels by traversing components
-            SwingUtilities.invokeLater {
-                val components = parentWindow.contentPane.components
-                for (component in components) {
-                    if (component is JComponent) {
-                        // Look for labels containing "avg" and "median"
-                        val avgLabel = findLabelByTextContaining(component, "Avg commits")
-                        val medianLabel = findLabelByTextContaining(component, "Median commits")
-                        
-                        // Update labels if found
-                        avgLabel?.let { 
-                            it.text = CommitTracerBundle.message("dialog.avg.commits.label", avgCommitsPerAuthor)
-                        }
-                        medianLabel?.let { 
-                            it.text = CommitTracerBundle.message("dialog.median.commits.label", medianCommitsPerAuthor)
-                        }
-                    }
-                }
-            }
-            
-            // Update the dialog title with filtered stats
-            val existingTitle = parentWindow.title
-            val repoName = if (existingTitle.contains(" - ")) {
-                " - " + existingTitle.substringAfter(" - ").substringBefore(":")
-            } else {
-                ""
-            }
-            
-            val filter = if (visibleRowCount < authorStats.size) " (Filtered)" else ""
-            parentWindow.title = "Commit Statistics$repoName$filter: $visibleRowCount authors, $totalCommits commits, $totalTickets tickets"
-        }
-    }
-    
-    /**
-     * Helper method to find a JLabel containing specific text
-     */
-    private fun findLabelByTextContaining(component: JComponent, textToFind: String): JBLabel? {
-        // Check if this component is a label with matching text
-        if (component is JBLabel && component.text?.contains(textToFind) == true) {
-            return component
-        }
-        
-        // Recursively search in child components
-        for (child in component.components) {
-            if (child is JComponent) {
-                val result = findLabelByTextContaining(child, textToFind)
-                if (result != null) {
-                    return result
-                }
-            }
-        }
-        
-        return null
+        // Use callback to update parent dialog statistics if provided
+        updateStatsCallback?.invoke(
+            visibleRowCount, 
+            totalCommits, 
+            totalTickets, 
+            avgCommitsPerAuthor, 
+            medianCommitsPerAuthor
+        )
     }
     
     /**

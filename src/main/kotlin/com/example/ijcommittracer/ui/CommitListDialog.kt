@@ -134,7 +134,16 @@ class CommitListDialog(
         val tabbedPane = JBTabbedPane()
         
         // Initialize panels
-        authorsPanel = AuthorsPanel(authorStats, filteredCommits)
+        authorsPanel = AuthorsPanel(
+            authorStats, 
+            filteredCommits,
+            // Lambda for updating statistics in the parent dialog
+            { _, _, _, avgCommits, medianCommits ->
+                // Update average and median labels
+                avgCommitsLabel.text = CommitTracerBundle.message("dialog.avg.commits.label", avgCommits)
+                medianCommitsLabel.text = CommitTracerBundle.message("dialog.median.commits.label", medianCommits)
+            }
+        )
         commitsPanel = CommitsPanel(filteredCommits)
         
         // Add authors tab first
@@ -287,7 +296,16 @@ class CommitListDialog(
                 commitsPanel.updateData(filteredCommits)
                 
                 // Create an entirely new AuthorsPanel with the new data
-                val newAuthorsPanel = AuthorsPanel(newAuthorStats, filteredCommits)
+                val newAuthorsPanel = AuthorsPanel(
+                    newAuthorStats, 
+                    filteredCommits,
+                    // Lambda for updating statistics in the parent dialog
+                    { _, _, _, avgCommits, medianCommits ->
+                        // Update average and median labels
+                        avgCommitsLabel.text = CommitTracerBundle.message("dialog.avg.commits.label", avgCommits)
+                        medianCommitsLabel.text = CommitTracerBundle.message("dialog.median.commits.label", medianCommits)
+                    }
+                )
                 
                 // Get the parent component (TabbedPane) and replace the old panel with the new one
                 val tabbedPane = authorsPanel.parent as JBTabbedPane
