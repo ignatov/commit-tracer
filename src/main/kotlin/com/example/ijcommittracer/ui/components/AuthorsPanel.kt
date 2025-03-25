@@ -815,6 +815,9 @@ class AuthorsPanel(
         if (authorStats.isNotEmpty()) {
             authorsTable.selectionModel.setSelectionInterval(0, 0)
         }
+        
+        // Set initial statistics in the title
+        updateFilteredStatistics()
     }
     
     /**
@@ -822,6 +825,9 @@ class AuthorsPanel(
      */
     fun updateData(newAuthors: List<AuthorStats>) {
         (authorsTable.model as AuthorTableModel).updateData(newAuthors)
+        
+        // Update statistics to reflect new data
+        updateFilteredStatistics()
     }
     
     /**
@@ -846,6 +852,41 @@ class AuthorsPanel(
         } else {
             @Suppress("UNCHECKED_CAST")
             sorter.rowFilter = createSearchFilter(text) as RowFilter<Any, Int>
+        }
+        
+        // Update statistics to reflect the filtered data
+        updateFilteredStatistics()
+    }
+    
+    /**
+     * Updates statistics based on currently visible rows
+     */
+    private fun updateFilteredStatistics() {
+        // Get visible row count
+        val visibleRowCount = authorsTable.rowCount
+        
+        // Calculate totals from visible rows
+        var totalCommits = 0
+        var totalTickets = 0
+        var totalBlockers = 0
+        var totalRegressions = 0
+        
+        for (viewRow in 0 until visibleRowCount) {
+            val modelRow = authorsTable.convertRowIndexToModel(viewRow)
+            val author = authorStats.values.toList()[modelRow]
+            
+            totalCommits += author.commitCount
+            totalTickets += author.youTrackTickets.size
+            totalBlockers += author.blockerTickets.size
+            totalRegressions += author.regressionTickets.size
+        }
+        
+        // Get parent window title bar and update it with filtered stats
+        val parentWindow = SwingUtilities.getWindowAncestor(this)
+        if (parentWindow != null && parentWindow is JDialog) {
+            val baseTitle = "Author Statistics"
+            val filter = if (visibleRowCount < authorStats.size) " (Filtered)" else ""
+            parentWindow.title = "$baseTitle$filter: $visibleRowCount authors, $totalCommits commits, $totalTickets tickets"
         }
     }
     
