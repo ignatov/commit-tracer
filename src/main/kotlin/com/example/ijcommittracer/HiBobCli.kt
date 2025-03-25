@@ -157,28 +157,18 @@ object HiBobCli {
         println("\nLooking up department with ID: $departmentId")
         
         try {
-            // Try to fetch all employees to find one with the given department ID
-            val employees = apiClient.fetchAllEmployees(debugLogger, errorLogger)
+            // Get employee data and extract department mappings
+            val employeeData = apiClient.fetchEmployeeData(
+                debugLogger = debugLogger,
+                errorLogger = errorLogger
+            )
             
-            // Get department mappings directly
-            println("Fetching department mappings directly...")
-            val departmentMappings = try {
-                // Access fetchDepartmentMappings through reflection since it's private
-                val method = HiBobApiClient::class.java.getDeclaredMethod(
-                    "fetchDepartmentMappings",
-                    Function1::class.java,
-                    Function2::class.java
-                )
-                method.isAccessible = true
-                
-                @Suppress("UNCHECKED_CAST")
-                method.invoke(apiClient, debugLogger, errorLogger) as Map<String, String>
-            } catch (e: Exception) {
-                debugLogger("Error accessing department mappings: ${e.message}")
-                emptyMap()
-            }
-                
-            // Check if we found a department name
+            // Create mapping of department IDs to names
+            val departmentMappings = employeeData.values
+                .filter { it.departmentId != null && it.team.isNotBlank() }
+                .associate { it.departmentId!! to it.team }
+            
+            // Look up department by ID
             val departmentName = departmentMappings[departmentId]
             
             if (departmentName != null) {
@@ -187,18 +177,17 @@ object HiBobCli {
                 println("- Name: $departmentName")
                 return@withContext
             }
-            // If direct lookup fails, try to find an employee with that department ID
-            val matchingEmployees = employees.filter { 
-                (it.work?.department != null && 
-                 it.work.department.equals(departmentId, ignoreCase = true)) ||
-                it.work?.reportsTo?.id == departmentId
+            
+            // If not found in mappings, look for employees with that department
+            val matchingEmployees = employeeData.values.filter { 
+                it.departmentId == departmentId
             }
             
             if (matchingEmployees.isNotEmpty()) {
                 val employee = matchingEmployees.first()
                 println("\nFound department from employee data:")
-                println("- Department: ${employee.work?.department}")
-                println("- Employee: ${employee.displayName} (${employee.email})")
+                println("- Department: ${employee.team}")
+                println("- Employee: ${employee.name} (${employee.email})")
                 return@withContext
             }
             
@@ -232,28 +221,18 @@ object HiBobCli {
         println("\nLooking up title with ID: $titleId")
         
         try {
-            // Try to fetch all employees to find one with the given title ID
-            val employees = apiClient.fetchAllEmployees(debugLogger, errorLogger)
+            // Get employee data and extract title mappings
+            val employeeData = apiClient.fetchEmployeeData(
+                debugLogger = debugLogger,
+                errorLogger = errorLogger
+            )
             
-            // Get title mappings directly
-            println("Fetching title mappings directly...")
-            val titleMappings = try {
-                // Access fetchTitleMappings through reflection since it's private
-                val method = HiBobApiClient::class.java.getDeclaredMethod(
-                    "fetchTitleMappings",
-                    Function1::class.java,
-                    Function2::class.java
-                )
-                method.isAccessible = true
-                
-                @Suppress("UNCHECKED_CAST")
-                method.invoke(apiClient, debugLogger, errorLogger) as Map<String, String>
-            } catch (e: Exception) {
-                debugLogger("Error accessing title mappings: ${e.message}")
-                emptyMap()
-            }
-                
-            // Check if we found a title name
+            // Create mapping of title IDs to names
+            val titleMappings = employeeData.values
+                .filter { it.titleId != null && it.title.isNotBlank() }
+                .associate { it.titleId!! to it.title }
+            
+            // Look up title by ID
             val titleName = titleMappings[titleId]
             
             if (titleName != null) {
@@ -262,17 +241,17 @@ object HiBobCli {
                 println("- Name: $titleName")
                 return@withContext
             }
-            // If direct lookup fails, try to find an employee with that title ID
-            val matchingEmployees = employees.filter { 
-                (it.work?.title != null && 
-                 it.work.title.equals(titleId, ignoreCase = true))
+            
+            // If not found in mappings, look for employees with that title
+            val matchingEmployees = employeeData.values.filter { 
+                it.titleId == titleId
             }
             
             if (matchingEmployees.isNotEmpty()) {
                 val employee = matchingEmployees.first()
                 println("\nFound title from employee data:")
-                println("- Title: ${employee.work?.title}")
-                println("- Employee: ${employee.displayName} (${employee.email})")
+                println("- Title: ${employee.title}")
+                println("- Employee: ${employee.name} (${employee.email})")
                 return@withContext
             }
             
@@ -307,69 +286,24 @@ object HiBobCli {
     
     /**
      * Prints employee information in a formatted way
-     * Uses direct mapping lookups for departments and titles
      */
     private fun printEmployee(employee: SimpleEmployeeInfo, apiClient: HiBobApiClient? = null) {
-        // Get mappings directly if API client is available
-        val departmentMappings = apiClient?.let {
-            try {
-                // Access fetchDepartmentMappings through reflection since it's private
-                val method = HiBobApiClient::class.java.getDeclaredMethod(
-                    "fetchDepartmentMappings",
-                    Function1::class.java,
-                    Function2::class.java
-                )
-                method.isAccessible = true
-                
-                val debugLogger: (String) -> Unit = { if (isDebugMode) println("[DEBUG] $it") }
-                
-                @Suppress("UNCHECKED_CAST")
-                method.invoke(it, debugLogger, null) as Map<String, String>
-            } catch (e: Exception) {
-                if (isDebugMode) println("[DEBUG] Error accessing department mappings: ${e.message}")
-                emptyMap()
-            }
-        } ?: emptyMap()
-        
-        val titleMappings = apiClient?.let {
-            try {
-                // Access fetchTitleMappings through reflection since it's private
-                val method = HiBobApiClient::class.java.getDeclaredMethod(
-                    "fetchTitleMappings",
-                    Function1::class.java,
-                    Function2::class.java
-                )
-                method.isAccessible = true
-                
-                val debugLogger: (String) -> Unit = { if (isDebugMode) println("[DEBUG] $it") }
-                
-                @Suppress("UNCHECKED_CAST")
-                method.invoke(it, debugLogger, null) as Map<String, String>
-            } catch (e: Exception) {
-                if (isDebugMode) println("[DEBUG] Error accessing title mappings: ${e.message}")
-                emptyMap()
-            }
-        } ?: emptyMap()
+        // When we print a single employee, we don't need to look up mapping again
+        // as the team and title values should already be mapped
         
         println("- ID: ${employee.id}")
         println("- Name: ${employee.name}")
         println("- Email: ${employee.email}")
         
-        // Show department name and ID using direct mapping lookup
-        val mappedDepartment = employee.departmentId?.let { departmentMappings[it] }
-        if (mappedDepartment != null) {
-            println("- Department: $mappedDepartment (ID: ${employee.departmentId})")
-        } else if (employee.departmentId != null) {
+        // Department info
+        if (employee.departmentId != null) {
             println("- Department: ${employee.team} (ID: ${employee.departmentId})")
         } else {
             println("- Department: ${employee.team}")
         }
         
-        // Show title name and ID using direct mapping lookup
-        val mappedTitle = employee.titleId?.let { titleMappings[it] }
-        if (mappedTitle != null) {
-            println("- Title: $mappedTitle (ID: ${employee.titleId})")
-        } else if (employee.titleId != null) {
+        // Title info
+        if (employee.titleId != null) {
             println("- Title: ${employee.title} (ID: ${employee.titleId})")
         } else {
             println("- Title: ${employee.title}")
@@ -385,7 +319,6 @@ object HiBobCli {
     
     /**
      * Fetches a single employee by email using the shared API client
-     * Uses the simplified API client method that handles all enrichment in one call
      */
     private suspend fun fetchEmployeeByEmail(
         email: String,
@@ -402,18 +335,18 @@ object HiBobCli {
             }
         }
         
-        // Use the simplified method to fetch employee with enriched data
-        println("Fetching employee with enriched title and department data...")
-        return@withContext apiClient.fetchEmployeeByEmailWithEnrichedData(
-            email = email,
+        // Fetch all employees as a map and retrieve the one we need
+        println("Fetching employee data with enriched title and department info...")
+        val employeeMap = apiClient.fetchEmployeeData(
             debugLogger = debugLogger,
             errorLogger = errorLogger
         )
+        
+        return@withContext employeeMap[email]
     }
     
     /**
      * Fetches all employees using the shared API client
-     * Uses the simplified API client method that handles all enrichment in one call
      */
     private suspend fun fetchAllEmployees(
         apiClient: HiBobApiClient
@@ -429,12 +362,14 @@ object HiBobCli {
             }
         }
         
-        // Use the simplified method to fetch all employees with enriched data
+        // Fetch all employees as a map and convert to list
         println("Fetching all employees with enriched title and department data...")
-        return@withContext apiClient.fetchAllEmployeesWithEnrichedData(
+        val employeeMap = apiClient.fetchEmployeeData(
             debugLogger = debugLogger,
             errorLogger = errorLogger
         )
+        
+        return@withContext employeeMap.values.toList()
     }
     
     /**
@@ -456,54 +391,97 @@ object HiBobCli {
             }
         }
         
-        println("\nNamed lists functionality has been simplified in the new API client.")
-        println("Current implementation focuses on direct title and department mappings.")
+        println("\nFetching employee data to extract title and department mappings...")
         
-        // Print available mappings
-        val titleMappings = try {
-            // Access fetchTitleMappings through reflection since it's private
-            val method = HiBobApiClient::class.java.getDeclaredMethod(
-                "fetchTitleMappings",
-                Function1::class.java,
-                Function2::class.java
-            )
-            method.isAccessible = true
+        // Get employee data and extract unique title and department mappings
+        val employeeData = apiClient.fetchEmployeeData(
+            debugLogger = debugLogger,
+            errorLogger = errorLogger
+        )
+        
+        // Create title and department mappings from the employee data
+        val titleMappings = mutableMapOf<String, String>()
+        val departmentMappings = mutableMapOf<String, String>()
+        
+        employeeData.values.forEach { employee ->
+            // Add title mapping if available
+            if (employee.titleId != null && employee.title.isNotBlank()) {
+                titleMappings[employee.titleId] = employee.title
+            }
             
-            @Suppress("UNCHECKED_CAST")
-            method.invoke(apiClient, debugLogger, errorLogger) as Map<String, String>
-        } catch (e: Exception) {
-            errorLogger("Error accessing title mappings: ${e.message}", e)
-            emptyMap()
+            // Add department mapping if available
+            if (employee.departmentId != null && employee.team.isNotBlank()) {
+                departmentMappings[employee.departmentId] = employee.team
+            }
         }
         
-        val departmentMappings = try {
-            // Access fetchDepartmentMappings through reflection since it's private
-            val method = HiBobApiClient::class.java.getDeclaredMethod(
-                "fetchDepartmentMappings",
-                Function1::class.java,
-                Function2::class.java
-            )
-            method.isAccessible = true
+        // Filter based on specific list if requested
+        when {
+            specificListName?.equals("title", ignoreCase = true) == true -> {
+                println("\nTitle Mappings (${titleMappings.size} entries):")
+                titleMappings.forEach { (id, name) ->
+                    println("- $name (ID: $id)")
+                }
+                
+                // Find specific item if requested
+                if (!findItemText.isNullOrBlank()) {
+                    val matchingIds = titleMappings.filterValues { 
+                        it.contains(findItemText, ignoreCase = true) 
+                    }
+                    
+                    if (matchingIds.isEmpty()) {
+                        println("\nNo title found containing '$findItemText'")
+                    } else {
+                        println("\nFound ${matchingIds.size} titles containing '$findItemText':")
+                        matchingIds.forEach { (id, name) ->
+                            println("- $name (ID: $id)")
+                        }
+                    }
+                }
+            }
             
-            @Suppress("UNCHECKED_CAST")
-            method.invoke(apiClient, debugLogger, errorLogger) as Map<String, String>
-        } catch (e: Exception) {
-            errorLogger("Error accessing department mappings: ${e.message}", e)
-            emptyMap()
+            specificListName?.equals("department", ignoreCase = true) == true -> {
+                println("\nDepartment Mappings (${departmentMappings.size} entries):")
+                departmentMappings.forEach { (id, name) ->
+                    println("- $name (ID: $id)")
+                }
+                
+                // Find specific item if requested
+                if (!findItemText.isNullOrBlank()) {
+                    val matchingIds = departmentMappings.filterValues { 
+                        it.contains(findItemText, ignoreCase = true) 
+                    }
+                    
+                    if (matchingIds.isEmpty()) {
+                        println("\nNo department found containing '$findItemText'")
+                    } else {
+                        println("\nFound ${matchingIds.size} departments containing '$findItemText':")
+                        matchingIds.forEach { (id, name) ->
+                            println("- $name (ID: $id)")
+                        }
+                    }
+                }
+            }
+            
+            else -> {
+                // Display all mappings
+                println("\nAvailable mappings:")
+                
+                println("\nTitle Mappings (${titleMappings.size} entries):")
+                titleMappings.forEach { (id, name) ->
+                    println("- $name (ID: $id)")
+                }
+                
+                println("\nDepartment Mappings (${departmentMappings.size} entries):")
+                departmentMappings.forEach { (id, name) ->
+                    println("- $name (ID: $id)")
+                }
+                
+                println("\nUse --list=title or --list=department to view specific lists")
+                println("Use --list=title --find=word to search for titles")
+                println("Use --title=ID or --department=ID to look up specific IDs")
+            }
         }
-        
-        println("\nAvailable mappings:")
-        println("\nTitle Mappings (${titleMappings.size} entries):")
-        titleMappings.forEach { (id, name) ->
-            println("- $name (ID: $id)")
-        }
-        
-        println("\nDepartment Mappings (${departmentMappings.size} entries):")
-        departmentMappings.forEach { (id, name) ->
-            println("- $name (ID: $id)")
-        }
-        
-        println("\nUse --title=ID or --department=ID to look up specific IDs")
     }
 }
 

@@ -2,27 +2,17 @@ package com.example.ijcommittracer.services
 
 import com.example.ijcommittracer.api.HiBobApiClient
 import com.example.ijcommittracer.util.EnvFileReader
-import com.intellij.openapi.components.*
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Service for interacting with HiBob API to fetch employee information.
- * Uses coroutines for async operations and implements efficient caching.
- */
 @Service(Service.Level.PROJECT)
-@State(
-    name = "com.example.ijcommittracer.HiBobApiService",
-    storages = [Storage("commitTracerHiBobCache.xml")]
-)
-class HiBobApiService(private val project: Project) : PersistentStateComponent<HiBobApiService.HiBobState> {
-    
+class HiBobApiService(private val project: Project) {
     // Constants for .env file properties
     private val HIBOB_API_TOKEN_KEY = "HIBOB_API_TOKEN"
     private val HIBOB_API_URL_KEY = "HIBOB_API_URL"
@@ -31,12 +21,7 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
     private val inMemoryCache = ConcurrentHashMap<String, CachedEmployeeInfo>()
     private val LOG = logger<HiBobApiService>()
     private val tokenStorage = TokenStorageService.getInstance(project)
-    
-    // Lazy initialization of the API client
-    private val apiClient by lazy { 
-        HiBobApiClient(getBaseUrl(), getToken() ?: "")
-    }
-    
+
     // State object for persistent storage
     private var myState = HiBobState()
     
@@ -51,36 +36,6 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
         var employees: Map<String, SerializableEmployeeInfo> = emptyMap(),
         var lastCacheUpdate: String = LocalDateTime.now().toString()
     )
-    
-    override fun getState(): HiBobState = myState
-    
-    override fun loadState(state: HiBobState) {
-        myState = state
-        
-        // Convert persistent state to runtime cache
-        populateInMemoryCacheFromState()
-        
-        // Parse the last cache update timestamp
-        try {
-            lastFullCacheRefresh = LocalDateTime.parse(myState.lastCacheUpdate)
-        } catch (e: Exception) {
-            LOG.warn("Failed to parse cache timestamp, will refresh cache", e)
-            lastFullCacheRefresh = LocalDateTime.now().minusDays(2)
-        }
-    }
-    
-    /**
-     * Populate the in-memory cache from the persistent state
-     */
-    private fun populateInMemoryCacheFromState() {
-        inMemoryCache.clear()
-        myState.employees.forEach { (email, employeeInfo) ->
-            inMemoryCache[email] = CachedEmployeeInfo(
-                info = employeeInfo.toEmployeeInfo(),
-                timestamp = LocalDateTime.parse(employeeInfo.timestamp)
-            )
-        }
-    }
     
     /**
      * Update the persistent state from the in-memory cache
@@ -119,32 +74,22 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
     
     /**
      * Get employee information by email.
-     * Uses cache if available and not expired.
+     * Uses cache if available. Returns null if not found.
      */
     fun getEmployeeByEmail(email: String): EmployeeInfo? {
         // Check if cache needs to be refreshed (once per day)
         checkAndRefreshCacheIfNeeded()
-        
+
         // Return from cache if available
         inMemoryCache[email]?.let { cachedInfo ->
             LOG.debug("Returning employee info for $email from cache")
             return cachedInfo.info
         }
         
-        // If not found in cache and full cache is loaded, return null
-        if (isFullCacheLoaded) {
-            LOG.debug("Employee $email not found in full cache")
-            return null
-        }
-        
-        // Otherwise try to fetch individual employee
-        val token = getToken()
-        if (token.isNullOrBlank()) {
-            LOG.warn("Unable to fetch employee: HiBob API token is missing")
-            return null
-        }
-        
-        return fetchEmployeeFromApi(email, token)
+        // If the employee is not in the cache, return null
+        // We don't do individual lookups - all data should be loaded in batch
+        LOG.debug("Employee $email not found in cache")
+        return null
     }
     
     /**
@@ -153,7 +98,8 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
      */
     private fun checkAndRefreshCacheIfNeeded() {
         val now = LocalDateTime.now()
-        if (true || Duration.between(lastFullCacheRefresh, now).toHours() >= 24) {
+        // Refresh if the cache is older than 24 hours
+        if (Duration.between(lastFullCacheRefresh, now).toHours() >= 24) {
             refreshFullCache()
         }
     }
@@ -221,14 +167,6 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
     }
     
     /**
-     * Get employee information asynchronously using coroutines.
-     * Preferred method for UI contexts to avoid blocking.
-     */
-    suspend fun getEmployeeByEmailAsync(email: String): EmployeeInfo? = withContext(Dispatchers.IO) {
-        getEmployeeByEmail(email)
-    }
-    
-    /**
      * Clear the cache.
      */
     fun clearCache() {
@@ -290,20 +228,14 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
             
             LOG.info("Fetching all employees with enriched data from HiBob API")
             
-            // Use the simplified client method to fetch employees with enriched data
-            val enrichedEmployees = client.fetchAllEmployeesWithEnrichedData(
+            // Use the single client method to fetch all employee data
+            val employeeDataMap = client.fetchEmployeeData(
                 debugLogger = { message -> LOG.debug(message) },
                 errorLogger = { message, error -> LOG.warn(message, error) }
             )
             
-            // Convert enriched employees to our internal EmployeeInfo model
-            val result = enrichedEmployees.mapNotNull { simpleInfo ->
-                val email = simpleInfo.email
-                
-                // Skip entries without email
-                if (email.isBlank()) return@mapNotNull null
-                
-                // Convert to our internal EmployeeInfo model
+            // Convert to our internal EmployeeInfo model
+            val result = employeeDataMap.map { (email, simpleInfo) ->
                 EmployeeInfo(
                     email = email,
                     name = simpleInfo.name,
@@ -325,54 +257,6 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
         }
     }
     
-    /**
-     * Fetch employee information from HiBob API with enriched title and department data.
-     * Uses the simplified API client method that handles all steps in one call.
-     */
-    private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
-        try {
-            // Re-initialize the API client with the provided token
-            val client = HiBobApiClient(getBaseUrl(), token)
-            
-            LOG.info("Fetching employee info for $email with enriched data from HiBob API")
-            
-            // Use the simplified client method to fetch employee with enriched data
-            val simpleEmployeeInfo = client.fetchEmployeeByEmailWithEnrichedData(
-                email = email,
-                debugLogger = { message -> LOG.debug(message) },
-                errorLogger = { message, error -> LOG.warn(message, error) }
-            ) ?: return null
-            
-            // Map to our internal EmployeeInfo model
-            val employeeInfo = EmployeeInfo(
-                email = email,
-                name = simpleEmployeeInfo.name,
-                team = simpleEmployeeInfo.team,
-                title = simpleEmployeeInfo.title,
-                manager = simpleEmployeeInfo.manager,
-                departmentId = simpleEmployeeInfo.departmentId,
-                titleId = simpleEmployeeInfo.titleId,
-                siteId = simpleEmployeeInfo.siteId,
-                teamId = simpleEmployeeInfo.teamId
-            )
-            
-            // Store in cache with timestamp
-            inMemoryCache[email] = CachedEmployeeInfo(
-                info = employeeInfo,
-                timestamp = LocalDateTime.now()
-            )
-            
-            // Update persistent state
-            updateStateFromCache()
-            
-            LOG.info("Added employee $email to cache")
-            return employeeInfo
-            
-        } catch (e: Exception) {
-            LOG.error("Failed to fetch enriched employee data for $email from HiBob API", e)
-            return null
-        }
-    }
     
     companion object {
         @JvmStatic
@@ -402,19 +286,6 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
         val siteId: String? = null,
         val teamId: String? = null
     ) {
-        fun toEmployeeInfo(): EmployeeInfo {
-            return EmployeeInfo(
-                email = email,
-                name = name,
-                team = team,
-                title = title,
-                manager = manager,
-                departmentId = departmentId,
-                titleId = titleId,
-                siteId = siteId,
-                teamId = teamId
-            )
-        }
     }
 }
 
