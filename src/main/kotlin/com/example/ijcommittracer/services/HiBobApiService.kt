@@ -2,6 +2,7 @@ package com.example.ijcommittracer.services
 
 import com.example.ijcommittracer.api.HiBobApiClient
 import com.example.ijcommittracer.util.EnvFileReader
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
@@ -10,6 +11,7 @@ import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
+import javax.swing.SwingUtilities
 
 @Service(Service.Level.PROJECT)
 class HiBobApiService(private val project: Project) {
@@ -94,13 +96,27 @@ class HiBobApiService(private val project: Project) {
     
     /**
      * Check if the cache needs to be refreshed (once per day)
-     * and trigger a refresh if needed
+     * and trigger a refresh if needed in a background thread
      */
     private fun checkAndRefreshCacheIfNeeded() {
         val now = LocalDateTime.now()
         // Refresh if the cache is older than 24 hours
         if (Duration.between(lastFullCacheRefresh, now).toHours() >= 24) {
-            refreshFullCache()
+            // Check if we're on the EDT to avoid UI freezes
+            if (SwingUtilities.isEventDispatchThread()) {
+                LOG.debug("Refreshing cache from background thread to avoid EDT freezes")
+                // Run cache refresh in a background thread
+                ApplicationManager.getApplication().executeOnPooledThread {
+                    try {
+                        refreshFullCache()
+                    } catch (e: Exception) {
+                        LOG.error("Error refreshing cache in background: ${e.message}", e)
+                    }
+                }
+            } else {
+                // Already on a background thread, can refresh directly
+                refreshFullCache()
+            }
         }
     }
     
@@ -157,8 +173,9 @@ class HiBobApiService(private val project: Project) {
      */
     fun initializeCache() {
         // Background thread to load the cache
-        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+        ApplicationManager.getApplication().executeOnPooledThread {
             try {
+                // Already on a background thread, so checkAndRefreshCacheIfNeeded will run directly
                 checkAndRefreshCacheIfNeeded()
             } catch (e: Exception) {
                 LOG.warn("Failed to initialize HiBob cache", e)
