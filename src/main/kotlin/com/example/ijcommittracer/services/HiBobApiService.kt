@@ -11,6 +11,8 @@ import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.SwingUtilities
 
 @Service(Service.Level.PROJECT)
@@ -27,9 +29,13 @@ class HiBobApiService(private val project: Project) {
     // State object for persistent storage
     private var myState = HiBobState()
     
-    // Last cache refresh timestamp
-    private var lastFullCacheRefresh: LocalDateTime = LocalDateTime.now().minusDays(2)
+    // Thread-safe variables for cache state
+    private val lastFullCacheRefresh = AtomicReference<LocalDateTime>(LocalDateTime.now().minusDays(2))
+    @Volatile
     private var isFullCacheLoaded = false
+    
+    // Flag to prevent concurrent refresh operations
+    private val isRefreshing = AtomicBoolean(false)
     
     /**
      * State class to persist employee cache
@@ -77,31 +83,52 @@ class HiBobApiService(private val project: Project) {
     /**
      * Get employee information by email.
      * Uses cache if available. Returns null if not found.
+     * 
+     * Thread-safe implementation that avoids race conditions.
      */
     fun getEmployeeByEmail(email: String): EmployeeInfo? {
-        // Check if cache needs to be refreshed (once per day)
-        checkAndRefreshCacheIfNeeded()
-
-        // Return from cache if available
+        // First quick check without synchronization
         inMemoryCache[email]?.let { cachedInfo ->
-            LOG.debug("Returning employee info for $email from cache")
+            LOG.debug("Returning employee info for $email from cache (quick path)")
             return cachedInfo.info
         }
         
-        // If the employee is not in the cache, return null
-        // We don't do individual lookups - all data should be loaded in batch
-        LOG.debug("Employee $email not found in cache")
-        return null
+        // If not found, check if we need to refresh cache
+        synchronized(this) {
+            // Check cache again in case another thread refreshed while we were waiting
+            inMemoryCache[email]?.let { cachedInfo ->
+                LOG.debug("Returning employee info for $email from cache (after sync)")
+                return cachedInfo.info
+            }
+            
+            // Check if cache needs to be refreshed
+            checkAndRefreshCacheIfNeeded()
+            
+            // One more check after potential refresh
+            inMemoryCache[email]?.let { cachedInfo ->
+                LOG.debug("Returning employee info for $email from cache (after refresh)")
+                return cachedInfo.info
+            }
+            
+            // If still not found, return null
+            // We don't do individual lookups - all data should be loaded in batch
+            LOG.debug("Employee $email not found in cache after refresh check")
+            return null
+        }
     }
     
     /**
      * Check if the cache needs to be refreshed (once per day)
      * and trigger a refresh if needed in a background thread
+     * 
+     * This method is synchronized through its caller.
      */
     private fun checkAndRefreshCacheIfNeeded() {
         val now = LocalDateTime.now()
-        // Refresh if the cache is older than 24 hours
-        if (Duration.between(lastFullCacheRefresh, now).toHours() >= 24) {
+        val lastRefresh = lastFullCacheRefresh.get()
+        
+        // Refresh if the cache is older than 24 hours and not already refreshing
+        if (Duration.between(lastRefresh, now).toHours() >= 24 && !isRefreshing.get()) {
             // Check if we're on the EDT to avoid UI freezes
             if (SwingUtilities.isEventDispatchThread()) {
                 LOG.debug("Refreshing cache from background thread to avoid EDT freezes")
@@ -122,9 +149,17 @@ class HiBobApiService(private val project: Project) {
     
     /**
      * Refresh the full cache by fetching all employees
+     * 
+     * Uses atomic flag to prevent concurrent refreshes.
      */
     @Synchronized
     fun refreshFullCache() {
+        // Use atomic flag to prevent concurrent refreshes
+        if (!isRefreshing.compareAndSet(false, true)) {
+            LOG.debug("Cache refresh already in progress, skipping")
+            return
+        }
+        
         try {
             val token = getToken()
             if (token.isNullOrBlank()) {
@@ -138,26 +173,28 @@ class HiBobApiService(private val project: Project) {
             val allEmployees = fetchAllEmployeesFromApi(token)
             
             if (allEmployees.isNotEmpty()) {
-                // Clear existing cache
-                inMemoryCache.clear()
-                
-                // Update cache with all employees
-                val now = LocalDateTime.now()
-                allEmployees.forEach { employeeInfo ->
-                    if (employeeInfo.email.isNotBlank()) {
-                        inMemoryCache[employeeInfo.email] = CachedEmployeeInfo(
-                            info = employeeInfo,
-                            timestamp = now
-                        )
+                synchronized(this) {
+                    // Clear existing cache
+                    inMemoryCache.clear()
+                    
+                    // Update cache with all employees
+                    val now = LocalDateTime.now()
+                    allEmployees.forEach { employeeInfo ->
+                        if (employeeInfo.email.isNotBlank()) {
+                            inMemoryCache[employeeInfo.email] = CachedEmployeeInfo(
+                                info = employeeInfo,
+                                timestamp = now
+                            )
+                        }
                     }
+                    
+                    // Update timestamp and flag atomically
+                    lastFullCacheRefresh.set(now)
+                    isFullCacheLoaded = true
+                    
+                    // Update persistent state
+                    updateStateFromCache()
                 }
-                
-                // Update timestamp and flag
-                lastFullCacheRefresh = now
-                isFullCacheLoaded = true
-                
-                // Update persistent state
-                updateStateFromCache()
                 
                 LOG.info("HiBob cache refreshed with ${allEmployees.size} employees")
             } else {
@@ -165,6 +202,9 @@ class HiBobApiService(private val project: Project) {
             }
         } catch (e: Exception) {
             LOG.warn("Failed to refresh HiBob employee cache", e)
+        } finally {
+            // Always reset the refresh flag
+            isRefreshing.set(false)
         }
     }
     
@@ -185,12 +225,32 @@ class HiBobApiService(private val project: Project) {
     
     /**
      * Clear the cache.
+     * Thread-safe implementation.
      */
+    @Synchronized
     fun clearCache() {
-        inMemoryCache.clear()
-        lastFullCacheRefresh = LocalDateTime.now().minusDays(2)
-        isFullCacheLoaded = false
-        updateStateFromCache()
+        // Wait for any ongoing refresh to complete
+        if (isRefreshing.get()) {
+            LOG.debug("Waiting for refresh to complete before clearing cache")
+            
+            // Try to acquire the refresh lock to ensure any refresh has completed
+            while (isRefreshing.get()) {
+                try {
+                    Thread.sleep(50) // Small delay to avoid CPU spinning
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
+            }
+        }
+        
+        synchronized(this) {
+            inMemoryCache.clear()
+            lastFullCacheRefresh.set(LocalDateTime.now().minusDays(2))
+            isFullCacheLoaded = false
+            updateStateFromCache()
+            LOG.debug("Cache cleared")
+        }
     }
     
     /**
