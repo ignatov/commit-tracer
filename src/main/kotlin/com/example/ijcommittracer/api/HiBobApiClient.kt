@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Shared utility class for making HiBob API requests.
- * Simplified to focus on fetching employees with enriched data.
+ * Provides a single public method to fetch employees with enriched data.
  */
 class HiBobApiClient(private val baseUrl: String, private val token: String) {
     
@@ -39,15 +39,16 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
     
     /**
      * Main public function: Fetches all employees with enriched department and title data
+     * and returns them as a map with email as key
      * 
      * @param debugLogger Optional function to log debug information
      * @param errorLogger Optional function to log errors
-     * @return List of enriched employee information
+     * @return Map of enriched employee information with email as key
      */
-    fun fetchAllEmployeesWithEnrichedData(
+    fun fetchEmployeeData(
         debugLogger: ((String) -> Unit)? = null,
         errorLogger: ((String, Throwable?) -> Unit)? = null
-    ): List<SimpleEmployeeInfo> {
+    ): Map<String, SimpleEmployeeInfo> {
         debugLogger?.invoke("Fetching all employees with enriched data")
         
         // Step 1: Fetch title and department mappings
@@ -60,73 +61,37 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
         val allEmployees = fetchAllEmployees(debugLogger, errorLogger)
         debugLogger?.invoke("Fetched ${allEmployees.size} employees")
         
-        // Step 3: Convert and enrich employees with the mappings
-        return allEmployees.map { employee ->
-            // Start with basic info
-            val basicInfo = SimpleEmployeeInfo.fromHiBobEmployee(employee)
-            
-            // Create enriched copy with department and title IDs mapped to names
-            val enriched = basicInfo.copy(
-                // If we have a department in our mappings, use it
-                team = employee.work?.department?.let { departmentId ->
-                    departmentMappings[departmentId] ?: basicInfo.team
-                } ?: basicInfo.team,
+        // Step 3: Convert and enrich employees with the mappings, create map with email as key
+        return allEmployees
+            .mapNotNull { employee ->
+                val email = employee.email
                 
-                // If we have a title in our mappings, use it
-                title = employee.work?.title?.let { titleId ->
-                    titleMappings[titleId] ?: basicInfo.title
-                } ?: basicInfo.title,
+                // Skip entries without email
+                if (email.isBlank()) return@mapNotNull null
                 
-                // Keep the IDs for reference
-                departmentId = employee.work?.department,
-                titleId = employee.work?.title
-            )
-            
-            enriched
-        }
-    }
-    
-    /**
-     * Fetches a specific employee by email and enriches with department and title data
-     * 
-     * @param email Email of the employee to fetch
-     * @param debugLogger Optional function to log debug information
-     * @param errorLogger Optional function to log errors
-     * @return Enriched employee information or null if not found
-     */
-    fun fetchEmployeeByEmailWithEnrichedData(
-        email: String,
-        debugLogger: ((String) -> Unit)? = null,
-        errorLogger: ((String, Throwable?) -> Unit)? = null
-    ): SimpleEmployeeInfo? {
-        debugLogger?.invoke("Fetching employee $email with enriched data")
-        
-        // Step 1: Fetch title and department mappings
-        val titleMappings = fetchTitleMappings(debugLogger, errorLogger)
-        val departmentMappings = fetchDepartmentMappings(debugLogger, errorLogger)
-        
-        // Step 2: Fetch the employee
-        val employee = fetchEmployeeByEmail(email, debugLogger, errorLogger) ?: return null
-        
-        // Step 3: Convert and enrich with the mappings
-        val basicInfo = SimpleEmployeeInfo.fromHiBobEmployee(employee)
-        
-        // Create enriched copy with department and title IDs mapped to names
-        return basicInfo.copy(
-            // If we have a department in our mappings, use it
-            team = employee.work?.department?.let { departmentId ->
-                departmentMappings[departmentId] ?: basicInfo.team
-            } ?: basicInfo.team,
-            
-            // If we have a title in our mappings, use it
-            title = employee.work?.title?.let { titleId ->
-                titleMappings[titleId] ?: basicInfo.title
-            } ?: basicInfo.title,
-            
-            // Keep the IDs for reference
-            departmentId = employee.work?.department,
-            titleId = employee.work?.title
-        )
+                // Start with basic info
+                val basicInfo = SimpleEmployeeInfo.fromHiBobEmployee(employee)
+                
+                // Create enriched copy with department and title IDs mapped to names
+                val enriched = basicInfo.copy(
+                    // If we have a department in our mappings, use it
+                    team = employee.work?.department?.let { departmentId ->
+                        departmentMappings[departmentId] ?: basicInfo.team
+                    } ?: basicInfo.team,
+                    
+                    // If we have a title in our mappings, use it
+                    title = employee.work?.title?.let { titleId ->
+                        titleMappings[titleId] ?: basicInfo.title
+                    } ?: basicInfo.title,
+                    
+                    // Keep the IDs for reference
+                    departmentId = employee.work?.department,
+                    titleId = employee.work?.title
+                )
+                
+                email to enriched
+            }
+            .toMap()
     }
     
     /**
@@ -151,10 +116,10 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
             
             if (!response.isSuccessful) {
                 errorLogger?.invoke("API request failed with status: ${response.code}", null)
-                return getFallbackTitleMappings()
+                return emptyMap()
             }
             
-            val responseBody = response.body?.string() ?: return getFallbackTitleMappings()
+            val responseBody = response.body?.string() ?: return emptyMap()
             
             // Try to parse as NamedListResponse
             try {
@@ -173,12 +138,12 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
                     }.toMap()
                 } catch (e: Exception) {
                     debugLogger?.invoke("Error parsing title response as List: ${e.message}")
-                    return getFallbackTitleMappings()
+                    return emptyMap()
                 }
             }
         } catch (e: Exception) {
             errorLogger?.invoke("Error fetching title mappings: ${e.message}", e)
-            return getFallbackTitleMappings()
+            return emptyMap()
         }
     }
     
@@ -204,10 +169,10 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
             
             if (!response.isSuccessful) {
                 errorLogger?.invoke("API request failed with status: ${response.code}", null)
-                return getFallbackDepartmentMappings()
+                return emptyMap()
             }
             
-            val responseBody = response.body?.string() ?: return getFallbackDepartmentMappings()
+            val responseBody = response.body?.string() ?: return emptyMap()
             
             // Try to parse as NamedListResponse
             try {
@@ -226,12 +191,12 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
                     }.toMap()
                 } catch (e: Exception) {
                     debugLogger?.invoke("Error parsing department response as List: ${e.message}")
-                    return getFallbackDepartmentMappings()
+                    return emptyMap()
                 }
             }
         } catch (e: Exception) {
             errorLogger?.invoke("Error fetching department mappings: ${e.message}", e)
-            return getFallbackDepartmentMappings()
+            return emptyMap()
         }
     }
     
@@ -345,25 +310,4 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
         }
     }
     
-    /**
-     * Returns fallback title ID to name mappings
-     */
-    private fun getFallbackTitleMappings(): Map<String, String> = mapOf(
-        "257770433" to "Team Lead",
-        "257769952" to "Software Engineer",
-        "257771492" to "Senior Software Engineer",
-        "257772233" to "HR Specialist",
-        "257770438" to "Developer Advocate"
-    )
-    
-    /**
-     * Returns fallback department ID to name mappings
-     */
-    private fun getFallbackDepartmentMappings(): Map<String, String> = mapOf(
-        "259393747" to "Human-AI Experience (HAX)",
-        "257767050" to "Developer Relations",
-        "261854618" to "Engineering",
-        "259670016" to "Human Resources Berlin",
-        "257767120" to "Product Management"
-    )
 }
