@@ -126,39 +126,29 @@ class CommitListDialog(
         val filterControlsPanel = JPanel(BorderLayout())
         filterControlsPanel.border = JBUI.Borders.empty(5, 5, 0, 5)
         
-        // Search field with label
+        // Search field - use a simple panel to let it expand
         val searchPanel = JPanel(BorderLayout())
         searchPanel.border = JBUI.Borders.emptyRight(10)
-        val searchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
-        searchLabel.border = JBUI.Borders.empty(0, 5)
-        searchPanel.add(searchLabel, BorderLayout.WEST)
         
-        // Use standard JTextField but with PlaceholderText
-        val searchField = JTextField().apply {
-            // Add placeholder text using IntelliJ's property
-            putClientProperty("JTextField.placeholderText", "by email, name, team or title")
+        // Use SearchTextField for better placeholder visibility and clear button
+        val searchField = com.intellij.ui.SearchTextField(false).apply {
+            // Configure search field behavior
+            setHistorySize(0) // No history popup
             
-            // Apply IntelliJ Platform UI property for border style to match other fields
-            putClientProperty("JTextField.Search.nonMacLayout", true)
-            preferredSize = Dimension(300, 30)
+            // Add placeholder text with better visibility
+            textEditor.emptyText.text = "by email, name, team or title"
             
-            // Add clear functionality with Escape key
-            addKeyListener(object : java.awt.event.KeyAdapter() {
-                override fun keyPressed(e: java.awt.event.KeyEvent) {
-                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
-                        text = ""
-                    }
-                }
-            })
+            // Set height to match date picker and expand horizontally
+            preferredSize = Dimension(1, 30) // Width 1 means "take all available space"
             
             // Add document listener to filter table when text changes
-            document.addDocumentListener(object : DocumentListener {
+            textEditor.document.addDocumentListener(object : DocumentListener {
                 override fun insertUpdate(e: javax.swing.event.DocumentEvent) = updateFilter()
                 override fun removeUpdate(e: javax.swing.event.DocumentEvent) = updateFilter()
                 override fun changedUpdate(e: javax.swing.event.DocumentEvent) = updateFilter()
                 
                 private fun updateFilter() {
-                    authorsPanel.filterByText(text)
+                    authorsPanel.filterByText(textEditor.text)
                 }
             })
         }
@@ -167,9 +157,10 @@ class CommitListDialog(
         // Create date filter panel
         dateFilterPanel = DateFilterPanel(fromDate, toDate, this::applyDateFilter)
         
-        // Wrap both search and date filter in a container with search on left, date filter on right
-        val filterRow = JPanel(BorderLayout())
-        filterRow.add(searchPanel, BorderLayout.WEST)
+        // Use BorderLayout with search in center to allow it to take all available space
+        // and date filter on the right with its preferred size
+        val filterRow = JPanel(BorderLayout(5, 0))
+        filterRow.add(searchPanel, BorderLayout.CENTER)
         filterRow.add(dateFilterPanel, BorderLayout.EAST)
         
         filterControlsPanel.add(filterRow, BorderLayout.CENTER)
