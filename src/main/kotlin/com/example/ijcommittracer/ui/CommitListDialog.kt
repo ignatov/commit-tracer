@@ -32,6 +32,8 @@ import java.util.*
 import java.util.regex.Pattern
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.JTextField
+import javax.swing.event.DocumentListener
 
 /**
  * Dialog for displaying a list of Git commits with date filtering and author aggregation.
@@ -120,13 +122,62 @@ class CommitListDialog(
         labelsPanel.add(medianCommitsLabel)
         infoPanel.add(labelsPanel, BorderLayout.CENTER)
         
+        // Create filter controls panel with search and date filter in one row
+        val filterControlsPanel = JPanel(BorderLayout())
+        filterControlsPanel.border = JBUI.Borders.empty(5, 5, 0, 5)
+        
+        // Search field with label
+        val searchPanel = JPanel(BorderLayout())
+        searchPanel.border = JBUI.Borders.emptyRight(10)
+        val searchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
+        searchLabel.border = JBUI.Borders.empty(0, 5)
+        searchPanel.add(searchLabel, BorderLayout.WEST)
+        
+        // Use standard JTextField but with PlaceholderText
+        val searchField = JTextField().apply {
+            // Add placeholder text using IntelliJ's property
+            putClientProperty("JTextField.placeholderText", "by email, name, team or title")
+            
+            // Apply IntelliJ Platform UI property for border style to match other fields
+            putClientProperty("JTextField.Search.nonMacLayout", true)
+            preferredSize = Dimension(300, 30)
+            
+            // Add clear functionality with Escape key
+            addKeyListener(object : java.awt.event.KeyAdapter() {
+                override fun keyPressed(e: java.awt.event.KeyEvent) {
+                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
+                        text = ""
+                    }
+                }
+            })
+            
+            // Add document listener to filter table when text changes
+            document.addDocumentListener(object : DocumentListener {
+                override fun insertUpdate(e: javax.swing.event.DocumentEvent) = updateFilter()
+                override fun removeUpdate(e: javax.swing.event.DocumentEvent) = updateFilter()
+                override fun changedUpdate(e: javax.swing.event.DocumentEvent) = updateFilter()
+                
+                private fun updateFilter() {
+                    authorsPanel.filterByText(text)
+                }
+            })
+        }
+        searchPanel.add(searchField, BorderLayout.CENTER)
+        
         // Create date filter panel
         dateFilterPanel = DateFilterPanel(fromDate, toDate, this::applyDateFilter)
         
-        // Header panel with repository info and filter controls
+        // Wrap both search and date filter in a container with search on left, date filter on right
+        val filterRow = JPanel(BorderLayout())
+        filterRow.add(searchPanel, BorderLayout.WEST)
+        filterRow.add(dateFilterPanel, BorderLayout.EAST)
+        
+        filterControlsPanel.add(filterRow, BorderLayout.CENTER)
+        
+        // Header panel with statistics and filter controls
         headerPanel = JPanel(BorderLayout())
-        headerPanel.add(infoPanel, BorderLayout.WEST)
-        headerPanel.add(dateFilterPanel, BorderLayout.EAST)
+        headerPanel.add(infoPanel, BorderLayout.NORTH)
+        headerPanel.add(filterControlsPanel, BorderLayout.SOUTH)
         panel.add(headerPanel, BorderLayout.NORTH)
 
         // Initialize only the authors panel
