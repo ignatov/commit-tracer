@@ -45,7 +45,6 @@ class CommitListDialog(
     private val repository: GitRepository
 ) : DialogWrapper(project) {
 
-    private lateinit var commitsPanel: CommitsPanel
     private lateinit var authorsPanel: AuthorsPanel
     private lateinit var dateFilterPanel: DateFilterPanel
     private lateinit var headerPanel: JPanel
@@ -67,7 +66,7 @@ class CommitListDialog(
     init {
         // Set the title with repository name
         val repoName = repository.root.name
-        title = "${CommitTracerBundle.message("dialog.commits.title")} - $repoName"
+        title = "Author Statistics - $repoName"
         
         init()
         // Prevent dialog from closing when Enter key is pressed
@@ -130,10 +129,7 @@ class CommitListDialog(
         headerPanel.add(dateFilterPanel, BorderLayout.EAST)
         panel.add(headerPanel, BorderLayout.NORTH)
 
-        // Create tabbed pane for different views
-        val tabbedPane = JBTabbedPane()
-        
-        // Initialize panels
+        // Initialize only the authors panel
         authorsPanel = AuthorsPanel(
             authorStats, 
             filteredCommits,
@@ -144,15 +140,9 @@ class CommitListDialog(
                 medianCommitsLabel.text = CommitTracerBundle.message("dialog.median.commits.label", medianCommits)
             }
         )
-        commitsPanel = CommitsPanel(filteredCommits)
         
-        // Add authors tab first
-        tabbedPane.addTab(CommitTracerBundle.message("dialog.tab.by.author"), authorsPanel)
-        
-        // Add commits tab second
-        tabbedPane.addTab(CommitTracerBundle.message("dialog.tab.all.commits"), commitsPanel)
-        
-        panel.add(tabbedPane, BorderLayout.CENTER)
+        // Add authors panel directly to the main panel (no tabs)
+        panel.add(authorsPanel, BorderLayout.CENTER)
         
         return panel
     }
@@ -290,10 +280,8 @@ class CommitListDialog(
                 // Stop the loading animation
                 dateFilterPanel.stopLoading()
                 
+                // Update filtered commits list
                 filteredCommits = newCommits
-                
-                // Update UI components with new data
-                commitsPanel.updateData(filteredCommits)
                 
                 // Create an entirely new AuthorsPanel with the new data
                 val newAuthorsPanel = AuthorsPanel(
@@ -307,10 +295,12 @@ class CommitListDialog(
                     }
                 )
                 
-                // Get the parent component (TabbedPane) and replace the old panel with the new one
-                val tabbedPane = authorsPanel.parent as JBTabbedPane
-                val authorTabIndex = 0 // First tab (By Author)
-                tabbedPane.setComponentAt(authorTabIndex, newAuthorsPanel)
+                // Get the parent component (main panel) and replace the old panel with the new one
+                val parent = authorsPanel.parent
+                parent.remove(authorsPanel)
+                parent.add(newAuthorsPanel, BorderLayout.CENTER)
+                parent.revalidate()
+                parent.repaint()
                 
                 // Update our reference
                 authorsPanel = newAuthorsPanel
