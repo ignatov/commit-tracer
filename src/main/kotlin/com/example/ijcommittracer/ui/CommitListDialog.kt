@@ -133,7 +133,7 @@ class CommitListDialog(
         // Use SearchTextField for better placeholder visibility and clear button
         val searchField = com.intellij.ui.SearchTextField(false).apply {
             // Configure search field behavior
-            setHistorySize(0) // No history popup
+            setHistorySize(1) // No history popup
             
             // Add placeholder text with better visibility
             textEditor.emptyText.text = "by email, name, team or title"
