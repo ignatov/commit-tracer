@@ -68,10 +68,22 @@ class AuthorsPanel(
         searchLabel.border = JBUI.Borders.empty(0, 5)
         searchPanel.add(searchLabel, BorderLayout.WEST)
         
-        // Use IntelliJ's SearchTextField for better placeholder support
-        val searchField = com.intellij.ui.SearchTextField().apply {
-            // Add placeholder text to guide users
-            textEditor.emptyText.text = "by email, name, team or title"
+        // Use standard JTextField but with PlaceholderText
+        val searchField = JTextField().apply {
+            // Add placeholder text using IntelliJ's property
+            putClientProperty("JTextField.placeholderText", "by email, name, team or title")
+            
+            // Apply IntelliJ Platform UI property for border style to match other fields
+            putClientProperty("JTextField.Search.nonMacLayout", true)
+            
+            // Add clear functionality with Escape key
+            addKeyListener(object : java.awt.event.KeyAdapter() {
+                override fun keyPressed(e: java.awt.event.KeyEvent) {
+                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
+                        text = ""
+                    }
+                }
+            })
         }
         searchPanel.add(searchField, BorderLayout.CENTER)
         filtersContainer.add(searchPanel, BorderLayout.NORTH)
@@ -82,10 +94,10 @@ class AuthorsPanel(
         }
         
         // Add listener for enhanced search across all fields
-        searchField.textEditor.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField.textEditor)
-            override fun removeUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField.textEditor)
-            override fun changedUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField.textEditor)
+        searchField.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
+            override fun removeUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
+            override fun changedUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
         })
         
         filterPanel.add(filtersContainer, BorderLayout.CENTER)
