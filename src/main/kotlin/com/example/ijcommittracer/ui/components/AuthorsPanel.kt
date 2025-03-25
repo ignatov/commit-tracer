@@ -68,18 +68,10 @@ class AuthorsPanel(
         searchLabel.border = JBUI.Borders.empty(0, 5)
         searchPanel.add(searchLabel, BorderLayout.WEST)
         
-        val searchField = JTextField().apply {
-            // Add clear button (X) with escape key handler to clear the field
-            addKeyListener(object : java.awt.event.KeyAdapter() {
-                override fun keyPressed(e: java.awt.event.KeyEvent) {
-                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
-                        text = ""
-                    }
-                }
-            })
-            
+        // Use IntelliJ's SearchTextField for better placeholder support
+        val searchField = com.intellij.ui.SearchTextField().apply {
             // Add placeholder text to guide users
-            putClientProperty("JTextField.placeholderText", "by email, name, team or title")
+            textEditor.emptyText.text = "by email, name, team or title"
         }
         searchPanel.add(searchField, BorderLayout.CENTER)
         filtersContainer.add(searchPanel, BorderLayout.NORTH)
@@ -90,10 +82,10 @@ class AuthorsPanel(
         }
         
         // Add listener for enhanced search across all fields
-        searchField.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
-            override fun removeUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
-            override fun changedUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField)
+        searchField.textEditor.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField.textEditor)
+            override fun removeUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField.textEditor)
+            override fun changedUpdate(e: javax.swing.event.DocumentEvent) = applyFilter(searchField.textEditor)
         })
         
         filterPanel.add(filtersContainer, BorderLayout.CENTER)
