@@ -170,7 +170,7 @@ class CommitListDialog(
         dateFilterPanel.startLoading()
         
         // Initialize HiBob cache in parallel for employee data
-        HiBobApiService.getInstance(project).initializeCache()
+//        HiBobApiService.getInstance(project).initializeCache()
         
         ProgressManager.getInstance().run(object : Task.Backgroundable(
             project, 

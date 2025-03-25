@@ -153,7 +153,7 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
      */
     private fun checkAndRefreshCacheIfNeeded() {
         val now = LocalDateTime.now()
-        if (Duration.between(lastFullCacheRefresh, now).toHours() >= 24) {
+        if (true || Duration.between(lastFullCacheRefresh, now).toHours() >= 24) {
             refreshFullCache()
         }
     }
@@ -280,43 +280,30 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
     }
     
     /**
-     * Fetch all employees from HiBob API using the search endpoint.
+     * Fetch all employees from HiBob API with enriched title and department data.
+     * Uses the simplified API client method that handles all steps in one call.
      */
     private fun fetchAllEmployeesFromApi(token: String): List<EmployeeInfo> {
         try {
             // Re-initialize the API client with the provided token
             val client = HiBobApiClient(getBaseUrl(), token)
             
-            LOG.info("Fetching all employees from HiBob API")
+            LOG.info("Fetching all employees with enriched data from HiBob API")
             
-            // Pre-load named lists for enrichment
-            client.fetchNamedLists(
+            // Use the simplified client method to fetch employees with enriched data
+            val enrichedEmployees = client.fetchAllEmployeesWithEnrichedData(
                 debugLogger = { message -> LOG.debug(message) },
                 errorLogger = { message, error -> LOG.warn(message, error) }
             )
             
-            // Use our shared API client to fetch all employees
-            val employees = client.fetchAllEmployees(
-                debugLogger = { message -> LOG.debug(message) },
-                errorLogger = { message, error -> LOG.warn(message, error) }
-            )
-            
-            // Convert detailed employee models to simplified EmployeeInfo objects with named list IDs
-            val result = employees.mapNotNull { employee ->
-                val email = employee.email
+            // Convert enriched employees to our internal EmployeeInfo model
+            val result = enrichedEmployees.mapNotNull { simpleInfo ->
+                val email = simpleInfo.email
                 
                 // Skip entries without email
                 if (email.isBlank()) return@mapNotNull null
                 
-                // First convert to SimpleEmployeeInfo with named list enrichment
-                val simpleInfo = client.convertToSimpleEmployeeInfo(
-                    employee = employee,
-                    enrichWithNamedLists = true,
-                    debugLogger = { message -> LOG.debug(message) },
-                    errorLogger = { message, error -> LOG.warn(message, error) }
-                )
-                
-                // Then convert to our internal EmployeeInfo model
+                // Convert to our internal EmployeeInfo model
                 EmployeeInfo(
                     email = email,
                     name = simpleInfo.name,
@@ -330,43 +317,31 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
                 )
             }
             
-            LOG.info("Successfully fetched ${result.size} employees from HiBob API")
+            LOG.info("Successfully fetched ${result.size} employees with enriched data from HiBob API")
             return result
         } catch (e: Exception) {
-            LOG.error("Failed to fetch/parse HiBob API response for all employees", e)
+            LOG.error("Failed to fetch enriched employee data from HiBob API", e)
             return emptyList()
         }
     }
     
     /**
-     * Fetch employee information from HiBob API using the search endpoint.
+     * Fetch employee information from HiBob API with enriched title and department data.
+     * Uses the simplified API client method that handles all steps in one call.
      */
     private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
         try {
             // Re-initialize the API client with the provided token
             val client = HiBobApiClient(getBaseUrl(), token)
             
-            LOG.info("Fetching employee info for $email from HiBob API")
-            // Pre-load named lists for enrichment
-            client.fetchNamedLists(
-                debugLogger = { message -> LOG.debug(message) },
-                errorLogger = { message, error -> LOG.warn(message, error) }
-            )
+            LOG.info("Fetching employee info for $email with enriched data from HiBob API")
             
-            // Use our shared API client to fetch the employee
-            val employee = client.fetchEmployeeByEmail(
+            // Use the simplified client method to fetch employee with enriched data
+            val simpleEmployeeInfo = client.fetchEmployeeByEmailWithEnrichedData(
                 email = email,
                 debugLogger = { message -> LOG.debug(message) },
                 errorLogger = { message, error -> LOG.warn(message, error) }
             ) ?: return null
-            
-            // Convert to our model with named list enrichment
-            val simpleEmployeeInfo = client.convertToSimpleEmployeeInfo(
-                employee = employee,
-                enrichWithNamedLists = true,
-                debugLogger = { message -> LOG.debug(message) },
-                errorLogger = { message, error -> LOG.warn(message, error) }
-            )
             
             // Map to our internal EmployeeInfo model
             val employeeInfo = EmployeeInfo(
@@ -377,7 +352,8 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
                 manager = simpleEmployeeInfo.manager,
                 departmentId = simpleEmployeeInfo.departmentId,
                 titleId = simpleEmployeeInfo.titleId,
-                siteId = simpleEmployeeInfo.siteId
+                siteId = simpleEmployeeInfo.siteId,
+                teamId = simpleEmployeeInfo.teamId
             )
             
             // Store in cache with timestamp
@@ -393,7 +369,7 @@ class HiBobApiService(private val project: Project) : PersistentStateComponent<H
             return employeeInfo
             
         } catch (e: Exception) {
-            LOG.error("Failed to fetch/parse HiBob API response for employee $email", e)
+            LOG.error("Failed to fetch enriched employee data for $email from HiBob API", e)
             return null
         }
     }

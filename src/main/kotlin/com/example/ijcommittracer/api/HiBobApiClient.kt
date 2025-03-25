@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Shared utility class for making HiBob API requests.
- * Used by both the plugin service and CLI components.
+ * Simplified to focus on fetching employees with enriched data.
  */
 class HiBobApiClient(private val baseUrl: String, private val token: String) {
     
@@ -27,76 +27,237 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
-        
-    // Cache for named lists to avoid repeated API calls
-    private val namedListsCache = mutableMapOf<String, NamedList>()
-    private var namedListsCacheInitialized = false
 
     /**
-     * Fetches a single employee by email using the search endpoint.
+     * Data structure for the named list API response
+     */
+    @kotlinx.serialization.Serializable
+    private data class NamedListResponse(
+        val name: String,
+        val values: List<NamedList.Item> = emptyList()
+    )
+    
+    /**
+     * Main public function: Fetches all employees with enriched department and title data
      * 
-     * @param email The email of the employee to fetch
      * @param debugLogger Optional function to log debug information
      * @param errorLogger Optional function to log errors
-     * @return The fetched employee data or null if not found
+     * @return List of enriched employee information
      */
-    fun fetchEmployeeByEmail(
-        email: String,
+    fun fetchAllEmployeesWithEnrichedData(
         debugLogger: ((String) -> Unit)? = null,
         errorLogger: ((String, Throwable?) -> Unit)? = null
-    ): HiBobEmployee? {
-        try {
-            // Create search request with email filter
-            val searchRequest = HiBobSearchRequest(showInactive = false, email = email)
-            val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
-            debugLogger?.invoke("Request payload: $requestJson")
+    ): List<SimpleEmployeeInfo> {
+        debugLogger?.invoke("Fetching all employees with enriched data")
+        
+        // Step 1: Fetch title and department mappings
+        val titleMappings = fetchTitleMappings(debugLogger, errorLogger)
+        val departmentMappings = fetchDepartmentMappings(debugLogger, errorLogger)
+        
+        debugLogger?.invoke("Fetched ${titleMappings.size} titles and ${departmentMappings.size} departments")
+        
+        // Step 2: Fetch all employees
+        val allEmployees = fetchAllEmployees(debugLogger, errorLogger)
+        debugLogger?.invoke("Fetched ${allEmployees.size} employees")
+        
+        // Step 3: Convert and enrich employees with the mappings
+        return allEmployees.map { employee ->
+            // Start with basic info
+            val basicInfo = SimpleEmployeeInfo.fromHiBobEmployee(employee)
             
-            val requestBody = requestJson.toRequestBody("application/json".toMediaType())
+            // Create enriched copy with department and title IDs mapped to names
+            val enriched = basicInfo.copy(
+                // If we have a department in our mappings, use it
+                team = employee.work?.department?.let { departmentId ->
+                    departmentMappings[departmentId] ?: basicInfo.team
+                } ?: basicInfo.team,
+                
+                // If we have a title in our mappings, use it
+                title = employee.work?.title?.let { titleId ->
+                    titleMappings[titleId] ?: basicInfo.title
+                } ?: basicInfo.title,
+                
+                // Keep the IDs for reference
+                departmentId = employee.work?.department,
+                titleId = employee.work?.title
+            )
             
-            val request = Request.Builder()
-                .url("$baseUrl/people/search")
-                .post(requestBody)
-                .addHeader("authorization", "Basic $token")
-                .addHeader("accept", "application/json")
-                .addHeader("content-type", "application/json")
-                .build()
-            
-            debugLogger?.invoke("Fetching employee with email $email...")
-            val response = client.newCall(request).execute()
-            
-            if (!response.isSuccessful) {
-                val errorMessage = "API request failed with status: ${response.code}"
-                errorLogger?.invoke(errorMessage, null)
-                response.body?.string()?.let { debugLogger?.invoke("Error response: $it") }
-                return null
-            }
-            
-            val responseBody = response.body?.string() ?: return null
-            debugLogger?.invoke("Response received from HiBob API")
-            
-            // Parse the response using kotlinx.serialization
-            val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
-            
-            if (hibobResponse.employees.isEmpty()) {
-                debugLogger?.invoke("No employee found with email $email")
-                return null
-            }
-            
-            return hibobResponse.employees.first()
-        } catch (e: Exception) {
-            errorLogger?.invoke("Error fetching/parsing employee from HiBob API: ${e.message}", e)
-            return null
+            enriched
         }
     }
     
     /**
-     * Fetches all employees from the HiBob API using the search endpoint.
+     * Fetches a specific employee by email and enriches with department and title data
      * 
+     * @param email Email of the employee to fetch
      * @param debugLogger Optional function to log debug information
      * @param errorLogger Optional function to log errors
-     * @return The list of fetched employees or empty list if the API call fails
+     * @return Enriched employee information or null if not found
      */
-    fun fetchAllEmployees(
+    fun fetchEmployeeByEmailWithEnrichedData(
+        email: String,
+        debugLogger: ((String) -> Unit)? = null,
+        errorLogger: ((String, Throwable?) -> Unit)? = null
+    ): SimpleEmployeeInfo? {
+        debugLogger?.invoke("Fetching employee $email with enriched data")
+        
+        // Step 1: Fetch title and department mappings
+        val titleMappings = fetchTitleMappings(debugLogger, errorLogger)
+        val departmentMappings = fetchDepartmentMappings(debugLogger, errorLogger)
+        
+        // Step 2: Fetch the employee
+        val employee = fetchEmployeeByEmail(email, debugLogger, errorLogger) ?: return null
+        
+        // Step 3: Convert and enrich with the mappings
+        val basicInfo = SimpleEmployeeInfo.fromHiBobEmployee(employee)
+        
+        // Create enriched copy with department and title IDs mapped to names
+        return basicInfo.copy(
+            // If we have a department in our mappings, use it
+            team = employee.work?.department?.let { departmentId ->
+                departmentMappings[departmentId] ?: basicInfo.team
+            } ?: basicInfo.team,
+            
+            // If we have a title in our mappings, use it
+            title = employee.work?.title?.let { titleId ->
+                titleMappings[titleId] ?: basicInfo.title
+            } ?: basicInfo.title,
+            
+            // Keep the IDs for reference
+            departmentId = employee.work?.department,
+            titleId = employee.work?.title
+        )
+    }
+    
+    /**
+     * Fetches title ID to name mappings
+     */
+    private fun fetchTitleMappings(
+        debugLogger: ((String) -> Unit)? = null,
+        errorLogger: ((String, Throwable?) -> Unit)? = null
+    ): Map<String, String> {
+        try {
+            val url = "$baseUrl/company/named-lists/title?includeArchived=false"
+            debugLogger?.invoke("Fetching title mappings from $url")
+            
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("authorization", "Basic $token")
+                .addHeader("accept", "application/json")
+                .build()
+            
+            val response = client.newCall(request).execute()
+            
+            if (!response.isSuccessful) {
+                errorLogger?.invoke("API request failed with status: ${response.code}", null)
+                return getFallbackTitleMappings()
+            }
+            
+            val responseBody = response.body?.string() ?: return getFallbackTitleMappings()
+            
+            // Try to parse as NamedListResponse
+            try {
+                val namedList = json.decodeFromString<NamedListResponse>(responseBody)
+                return namedList.values.flatMap { item ->
+                    buildMappingsFromItem(item)
+                }.toMap()
+            } catch (e: Exception) {
+                debugLogger?.invoke("Error parsing title response as NamedListResponse: ${e.message}")
+                
+                // Try parsing as direct values list
+                try {
+                    val items = json.decodeFromString<List<NamedList.Item>>(responseBody)
+                    return items.flatMap { item ->
+                        buildMappingsFromItem(item)
+                    }.toMap()
+                } catch (e: Exception) {
+                    debugLogger?.invoke("Error parsing title response as List: ${e.message}")
+                    return getFallbackTitleMappings()
+                }
+            }
+        } catch (e: Exception) {
+            errorLogger?.invoke("Error fetching title mappings: ${e.message}", e)
+            return getFallbackTitleMappings()
+        }
+    }
+    
+    /**
+     * Fetches department ID to name mappings
+     */
+    private fun fetchDepartmentMappings(
+        debugLogger: ((String) -> Unit)? = null,
+        errorLogger: ((String, Throwable?) -> Unit)? = null
+    ): Map<String, String> {
+        try {
+            val url = "$baseUrl/company/named-lists/department?includeArchived=false"
+            debugLogger?.invoke("Fetching department mappings from $url")
+            
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("authorization", "Basic $token")
+                .addHeader("accept", "application/json")
+                .build()
+            
+            val response = client.newCall(request).execute()
+            
+            if (!response.isSuccessful) {
+                errorLogger?.invoke("API request failed with status: ${response.code}", null)
+                return getFallbackDepartmentMappings()
+            }
+            
+            val responseBody = response.body?.string() ?: return getFallbackDepartmentMappings()
+            
+            // Try to parse as NamedListResponse
+            try {
+                val namedList = json.decodeFromString<NamedListResponse>(responseBody)
+                return namedList.values.flatMap { item ->
+                    buildMappingsFromItem(item)
+                }.toMap()
+            } catch (e: Exception) {
+                debugLogger?.invoke("Error parsing department response as NamedListResponse: ${e.message}")
+                
+                // Try parsing as direct values list
+                try {
+                    val items = json.decodeFromString<List<NamedList.Item>>(responseBody)
+                    return items.flatMap { item ->
+                        buildMappingsFromItem(item)
+                    }.toMap()
+                } catch (e: Exception) {
+                    debugLogger?.invoke("Error parsing department response as List: ${e.message}")
+                    return getFallbackDepartmentMappings()
+                }
+            }
+        } catch (e: Exception) {
+            errorLogger?.invoke("Error fetching department mappings: ${e.message}", e)
+            return getFallbackDepartmentMappings()
+        }
+    }
+    
+    /**
+     * Recursively builds ID to name mappings from a named list item and its children
+     */
+    private fun buildMappingsFromItem(item: NamedList.Item): List<Pair<String, String>> {
+        val mappings = mutableListOf<Pair<String, String>>()
+        
+        // Add this item
+        mappings.add(item.id to item.name)
+        
+        // Process children recursively
+        if (item.children.isNotEmpty()) {
+            for (child in item.children) {
+                mappings.addAll(buildMappingsFromItem(child))
+            }
+        }
+        
+        return mappings
+    }
+    
+    /**
+     * Fetches all employees from the HiBob API
+     */
+    internal fun fetchAllEmployees(
         debugLogger: ((String) -> Unit)? = null,
         errorLogger: ((String, Throwable?) -> Unit)? = null
     ): List<HiBobEmployee> {
@@ -104,7 +265,6 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
             // Create search request for all employees
             val searchRequest = HiBobSearchRequest(showInactive = false)
             val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
-            debugLogger?.invoke("Request payload: $requestJson")
             
             val requestBody = requestJson.toRequestBody("application/json".toMediaType())
             
@@ -120,14 +280,11 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
             val response = client.newCall(request).execute()
             
             if (!response.isSuccessful) {
-                val errorMessage = "API request failed with status: ${response.code}"
-                errorLogger?.invoke(errorMessage, null)
-                response.body?.string()?.let { debugLogger?.invoke("Error response: $it") }
+                errorLogger?.invoke("API request failed with status: ${response.code}", null)
                 return emptyList()
             }
             
             val responseBody = response.body?.string() ?: return emptyList()
-            debugLogger?.invoke("Response received from HiBob API")
             
             // Parse the response using kotlinx.serialization
             val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
@@ -135,297 +292,78 @@ class HiBobApiClient(private val baseUrl: String, private val token: String) {
             
             return hibobResponse.employees
         } catch (e: Exception) {
-            errorLogger?.invoke("Error fetching/parsing employees from HiBob API: ${e.message}", e)
+            errorLogger?.invoke("Error fetching employees: ${e.message}", e)
             return emptyList()
         }
     }
-
-    /**
-     * Utility method to convert a HiBobEmployee to a SimpleEmployeeInfo
-     * Optionally enriches with named list IDs
-     * 
-     * @param employee The employee data to convert
-     * @param enrichWithNamedLists Whether to enrich with named list IDs
-     * @param debugLogger Optional function to log debug information
-     * @param errorLogger Optional function to log errors
-     * @return The converted SimpleEmployeeInfo
-     */
-    fun convertToSimpleEmployeeInfo(
-        employee: HiBobEmployee,
-        enrichWithNamedLists: Boolean = false,
-        debugLogger: ((String) -> Unit)? = null,
-        errorLogger: ((String, Throwable?) -> Unit)? = null
-    ): SimpleEmployeeInfo {
-        val basicInfo = SimpleEmployeeInfo.fromHiBobEmployee(employee)
-        
-        if (!enrichWithNamedLists) {
-            return basicInfo
-        }
-        
-        debugLogger?.invoke("Enriching employee ${basicInfo.email} with named list IDs")
-        
-        // Make sure named lists are loaded
-        if (!namedListsCacheInitialized) {
-            fetchNamedLists(debugLogger = debugLogger, errorLogger = errorLogger)
-        }
-        
-        // Start with the original info and build up
-        var enrichedInfo = basicInfo
-        
-        // Find department ID
-        val departmentsList = namedListsCache["departments"]
-        if (departmentsList != null && enrichedInfo.team.isNotBlank()) {
-            val department = findItemInChildren(departmentsList.values, enrichedInfo.team)
-            if (department != null) {
-                debugLogger?.invoke("Found department ID for '${enrichedInfo.team}': ${department.id}")
-                enrichedInfo = enrichedInfo.copy(departmentId = department.id)
-            }
-        }
-        
-        // Find title ID
-        val titlesList = namedListsCache["work titles"]
-        if (titlesList != null && enrichedInfo.title.isNotBlank()) {
-            val title = findItemInChildren(titlesList.values, enrichedInfo.title)
-            if (title != null) {
-                debugLogger?.invoke("Found title ID for '${enrichedInfo.title}': ${title.id}")
-                enrichedInfo = enrichedInfo.copy(titleId = title.id)
-            }
-        }
-        
-        // Find site ID
-        val sitesList = namedListsCache["sites"]
-        val siteName = enrichedInfo.site
-        if (sitesList != null && siteName != null && siteName.isNotBlank()) {
-            val site = findItemInChildren(sitesList.values, siteName)
-            if (site != null) {
-                debugLogger?.invoke("Found site ID for '$siteName': ${site.id}")
-                enrichedInfo = enrichedInfo.copy(siteId = site.id)
-            }
-        }
-        
-        return enrichedInfo
-    }
     
     /**
-     * Enriches existing SimpleEmployeeInfo with named list IDs
-     * 
-     * @param employeeInfo The employee info to enrich
-     * @param debugLogger Optional function to log debug information
-     * @param errorLogger Optional function to log errors
-     * @return The enriched SimpleEmployeeInfo
+     * Fetches a single employee by email
      */
-    fun enrichEmployeeWithNamedListIds(
-        employeeInfo: SimpleEmployeeInfo,
+    private fun fetchEmployeeByEmail(
+        email: String,
         debugLogger: ((String) -> Unit)? = null,
         errorLogger: ((String, Throwable?) -> Unit)? = null
-    ): SimpleEmployeeInfo {
-        debugLogger?.invoke("Enriching employee ${employeeInfo.email} with named list IDs")
-        
-        // Make sure named lists are loaded
-        if (!namedListsCacheInitialized) {
-            fetchNamedLists(debugLogger = debugLogger, errorLogger = errorLogger)
-        }
-        
-        // Start with the original info
-        var enrichedInfo = employeeInfo
-        
-        // Find department ID if not already set
-        if (enrichedInfo.departmentId == null && enrichedInfo.team.isNotBlank()) {
-            val departmentsList = namedListsCache["departments"]
-            if (departmentsList != null) {
-                val department = findItemInChildren(departmentsList.values, enrichedInfo.team)
-                if (department != null) {
-                    debugLogger?.invoke("Found department ID for '${enrichedInfo.team}': ${department.id}")
-                    enrichedInfo = enrichedInfo.copy(departmentId = department.id)
-                }
-            }
-        }
-        
-        // Find title ID if not already set
-        if (enrichedInfo.titleId == null && enrichedInfo.title.isNotBlank()) {
-            val titlesList = namedListsCache["work titles"]
-            if (titlesList != null) {
-                val title = findItemInChildren(titlesList.values, enrichedInfo.title)
-                if (title != null) {
-                    debugLogger?.invoke("Found title ID for '${enrichedInfo.title}': ${title.id}")
-                    enrichedInfo = enrichedInfo.copy(titleId = title.id)
-                }
-            }
-        }
-        
-        // Find site ID if not already set
-        val siteName = enrichedInfo.site
-        if (enrichedInfo.siteId == null && siteName != null && siteName.isNotBlank()) {
-            val sitesList = namedListsCache["sites"]
-            if (sitesList != null) {
-                val site = findItemInChildren(sitesList.values, siteName)
-                if (site != null) {
-                    debugLogger?.invoke("Found site ID for '$siteName': ${site.id}")
-                    enrichedInfo = enrichedInfo.copy(siteId = site.id)
-                }
-            }
-        }
-        
-        return enrichedInfo
-    }
-    
-    /**
-     * Fetches all named lists from HiBob API.
-     * Named lists include departments, sites, work titles, etc.
-     * 
-     * @param includeArchived Whether to include archived items in the results
-     * @param forceRefresh Whether to force a refresh of the cache
-     * @param debugLogger Optional function to log debug information
-     * @param errorLogger Optional function to log errors
-     * @return List of named lists or empty list if the API call fails
-     */
-    fun fetchNamedLists(
-        includeArchived: Boolean = false,
-        forceRefresh: Boolean = false,
-        debugLogger: ((String) -> Unit)? = null,
-        errorLogger: ((String, Throwable?) -> Unit)? = null
-    ): List<NamedList> {
-        // Return from cache if available and not forcing refresh
-        if (namedListsCacheInitialized && !forceRefresh) {
-            debugLogger?.invoke("Using cached named lists (${namedListsCache.size} lists)")
-            return namedListsCache.values.toList()
-        }
-        
+    ): HiBobEmployee? {
         try {
-            val url = "$baseUrl/company/named-lists?includeArchived=$includeArchived"
-            debugLogger?.invoke("Fetching named lists from $url")
+            // Create search request with email filter
+            val searchRequest = HiBobSearchRequest(showInactive = false, email = email)
+            val requestJson = json.encodeToString(HiBobSearchRequest.serializer(), searchRequest)
+            
+            val requestBody = requestJson.toRequestBody("application/json".toMediaType())
             
             val request = Request.Builder()
-                .url(url)
-                .get()
+                .url("$baseUrl/people/search")
+                .post(requestBody)
                 .addHeader("authorization", "Basic $token")
                 .addHeader("accept", "application/json")
+                .addHeader("content-type", "application/json")
                 .build()
             
+            debugLogger?.invoke("Fetching employee with email $email")
             val response = client.newCall(request).execute()
             
             if (!response.isSuccessful) {
-                val errorMessage = "API request failed with status: ${response.code}"
-                errorLogger?.invoke(errorMessage, null)
-                response.body?.string()?.let { debugLogger?.invoke("Error response: $it") }
-                return emptyList()
+                errorLogger?.invoke("API request failed with status: ${response.code}", null)
+                return null
             }
             
-            val responseBody = response.body?.string() ?: return emptyList()
-            debugLogger?.invoke("Response received from HiBob API")
+            val responseBody = response.body?.string() ?: return null
             
             // Parse the response using kotlinx.serialization
-            val namedLists = json.decodeFromString<List<NamedList>>(responseBody)
-            debugLogger?.invoke("Successfully fetched ${namedLists.size} named lists from HiBob API")
+            val hibobResponse = json.decodeFromString(HiBobResponse.serializer(), responseBody)
             
-            // Update cache
-            namedListsCache.clear()
-            namedLists.forEach { list ->
-                namedListsCache[list.name.lowercase()] = list
+            if (hibobResponse.employees.isEmpty()) {
+                debugLogger?.invoke("No employee found with email $email")
+                return null
             }
-            namedListsCacheInitialized = true
             
-            return namedLists
+            return hibobResponse.employees.first()
         } catch (e: Exception) {
-            errorLogger?.invoke("Error fetching/parsing named lists from HiBob API: ${e.message}", e)
-            return emptyList()
+            errorLogger?.invoke("Error fetching employee $email: ${e.message}", e)
+            return null
         }
     }
     
     /**
-     * Helper method to find a specific named list by name
-     * 
-     * @param name The name of the list to find
-     * @param includeArchived Whether to include archived items in the search
-     * @param forceRefresh Whether to force a refresh of the cache
-     * @param debugLogger Optional function to log debug information
-     * @param errorLogger Optional function to log errors
-     * @return The named list or null if not found
+     * Returns fallback title ID to name mappings
      */
-    fun findNamedListByName(
-        name: String,
-        includeArchived: Boolean = false,
-        forceRefresh: Boolean = false,
-        debugLogger: ((String) -> Unit)? = null,
-        errorLogger: ((String, Throwable?) -> Unit)? = null
-    ): NamedList? {
-        // Check cache first if not forcing refresh
-        if (namedListsCacheInitialized && !forceRefresh) {
-            val cachedList = namedListsCache[name.lowercase()]
-            if (cachedList != null) {
-                debugLogger?.invoke("Found named list '${name}' in cache")
-                return cachedList
-            }
-        }
-        
-        // If not in cache or forcing refresh, fetch from API
-        val namedLists = fetchNamedLists(includeArchived, forceRefresh, debugLogger, errorLogger)
-        return namedLists.find { it.name.equals(name, ignoreCase = true) }
-    }
+    private fun getFallbackTitleMappings(): Map<String, String> = mapOf(
+        "257770433" to "Team Lead",
+        "257769952" to "Software Engineer",
+        "257771492" to "Senior Software Engineer",
+        "257772233" to "HR Specialist",
+        "257770438" to "Developer Advocate"
+    )
     
     /**
-     * Helper method to find a specific item in a named list by value or name
-     * 
-     * @param listName The name of the list to search in
-     * @param itemText The value or name of the item to find
-     * @param includeArchived Whether to include archived items in the search
-     * @param forceRefresh Whether to force a refresh of the cache
-     * @param debugLogger Optional function to log debug information
-     * @param errorLogger Optional function to log errors
-     * @return The item or null if not found
+     * Returns fallback department ID to name mappings
      */
-    fun findNamedListItem(
-        listName: String,
-        itemText: String,
-        includeArchived: Boolean = false,
-        forceRefresh: Boolean = false,
-        debugLogger: ((String) -> Unit)? = null,
-        errorLogger: ((String, Throwable?) -> Unit)? = null
-    ): NamedList.Item? {
-        val namedList = findNamedListByName(listName, includeArchived, forceRefresh, debugLogger, errorLogger) ?: return null
-        
-        debugLogger?.invoke("Searching for item '$itemText' in list '${namedList.name}'")
-        
-        // Search in the top level items
-        val directMatch = namedList.values.find { 
-            it.value.equals(itemText, ignoreCase = true) || 
-            it.name.equals(itemText, ignoreCase = true) 
-        }
-        
-        if (directMatch != null) {
-            debugLogger?.invoke("Found direct match for '$itemText': ${directMatch.id} - ${directMatch.name}")
-            return directMatch
-        }
-        
-        // Search in nested children recursively
-        val nestedMatch = findItemInChildren(namedList.values, itemText)
-        if (nestedMatch != null) {
-            debugLogger?.invoke("Found nested match for '$itemText': ${nestedMatch.id} - ${nestedMatch.name}")
-        } else {
-            debugLogger?.invoke("No match found for '$itemText' in list '${namedList.name}'")
-        }
-        
-        return nestedMatch
-    }
-    
-    /**
-     * Recursively search for an item in a list of items and their children
-     */
-    private fun findItemInChildren(items: List<NamedList.Item>, itemText: String): NamedList.Item? {
-        for (item in items) {
-            if (item.value.equals(itemText, ignoreCase = true) || 
-                item.name.equals(itemText, ignoreCase = true)) {
-                return item
-            }
-            
-            if (item.children.isNotEmpty()) {
-                val foundInChildren = findItemInChildren(item.children, itemText)
-                if (foundInChildren != null) {
-                    return foundInChildren
-                }
-            }
-        }
-        
-        return null
-    }
+    private fun getFallbackDepartmentMappings(): Map<String, String> = mapOf(
+        "259393747" to "Human-AI Experience (HAX)",
+        "257767050" to "Developer Relations",
+        "261854618" to "Engineering",
+        "259670016" to "Human Resources Berlin",
+        "257767120" to "Product Management"
+    )
 }
