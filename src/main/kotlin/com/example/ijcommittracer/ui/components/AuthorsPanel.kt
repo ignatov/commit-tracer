@@ -74,6 +74,9 @@ class AuthorsPanel(
                     }
                 }
             })
+            
+            // Add placeholder text to guide users
+            putClientProperty("JTextField.placeholderText", "by email, name, team or title")
         }
         searchPanel.add(searchField, BorderLayout.CENTER)
         filtersContainer.add(searchPanel, BorderLayout.NORTH)
