@@ -884,9 +884,16 @@ class AuthorsPanel(
         // Get parent window title bar and update it with filtered stats
         val parentWindow = SwingUtilities.getWindowAncestor(this)
         if (parentWindow != null && parentWindow is JDialog) {
-            val baseTitle = "Author Statistics"
+            // Parse the existing title to preserve repository name
+            val existingTitle = parentWindow.title
+            val repoName = if (existingTitle.contains(" - ")) {
+                " - " + existingTitle.substringAfter(" - ").substringBefore(":")
+            } else {
+                ""
+            }
+            
             val filter = if (visibleRowCount < authorStats.size) " (Filtered)" else ""
-            parentWindow.title = "$baseTitle$filter: $visibleRowCount authors, $totalCommits commits, $totalTickets tickets"
+            parentWindow.title = "Commit Statistics$repoName$filter: $visibleRowCount authors, $totalCommits commits, $totalTickets tickets"
         }
     }
     

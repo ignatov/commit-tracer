@@ -65,7 +65,10 @@ class CommitListDialog(
     private val youtrackTicketPattern = Pattern.compile("([A-Z]+-\\d+)")
 
     init {
-        title = CommitTracerBundle.message("dialog.commits.title")
+        // Set the title with repository name
+        val repoName = repository.root.name
+        title = "${CommitTracerBundle.message("dialog.commits.title")} - $repoName"
+        
         init()
         // Prevent dialog from closing when Enter key is pressed
         rootPane.defaultButton = null
@@ -105,18 +108,15 @@ class CommitListDialog(
             "0"
         }
         
-        // Create repository info panel
-        val repoName = if (commits.isNotEmpty()) commits.first().repositoryName else repository.root.name
+        // Create statistics panel
         val infoPanel = JPanel(BorderLayout(10, 0))
         infoPanel.border = JBUI.Borders.empty(0, 5, 5, 0)
         
-        val repoLabel = JBLabel(CommitTracerBundle.message("dialog.repository.label", repoName))
         avgCommitsLabel = JBLabel(CommitTracerBundle.message("dialog.avg.commits.label", avgCommitsPerAuthor))
         medianCommitsLabel = JBLabel(CommitTracerBundle.message("dialog.median.commits.label", medianCommitsPerAuthor))
         
         // Add all labels to a flow panel for horizontal layout
         val labelsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 15, 0))
-        labelsPanel.add(repoLabel)
         labelsPanel.add(avgCommitsLabel)
         labelsPanel.add(medianCommitsLabel)
         infoPanel.add(labelsPanel, BorderLayout.CENTER)
