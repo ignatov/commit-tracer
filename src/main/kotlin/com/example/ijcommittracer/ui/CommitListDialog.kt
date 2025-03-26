@@ -9,7 +9,6 @@ import com.example.ijcommittracer.actions.ListCommitsAction.ChangeType
 import com.example.ijcommittracer.services.NotificationService
 import com.example.ijcommittracer.services.HiBobApiService
 import com.example.ijcommittracer.ui.components.AuthorsPanel
-import com.example.ijcommittracer.ui.components.CommitsPanel
 import com.example.ijcommittracer.ui.components.DateFilterPanel
 import com.example.ijcommittracer.ui.models.AuthorTableModel
 import com.example.ijcommittracer.ui.models.CommitTableModel
