@@ -153,6 +153,9 @@ class AuthorsPanel(
         val rows = if (selectedRows.isEmpty()) (0 until table.rowCount).toList() else selectedRows.toList()
         val columns = if (selectedColumns.isEmpty()) (0 until table.columnCount).toList() else selectedColumns.toList()
         
+        // Handle cell selection vs. row selection
+        val isCellSelection = table.cellSelectionEnabled && selectedColumns.isNotEmpty() && selectedRows.isNotEmpty()
+        
         val model = table.model
         val sb = StringBuilder()
         
@@ -213,7 +216,11 @@ class AuthorsPanel(
         val tableModel = AuthorTableModel(authorList)
         
         authorsTable = JBTable(tableModel).apply {
-            setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+            // Allow multiple cell/row selection
+            setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION)
+            cellSelectionEnabled = true
+            rowSelectionAllowed = true
+            columnSelectionAllowed = true
             
             // Add Ctrl+C/Cmd+C copy support
             // menuShortcutKeyMaskEx will automatically use Command on macOS and Ctrl on Windows/Linux
@@ -446,6 +453,12 @@ class AuthorsPanel(
         
         // Create author commits table
         authorCommitsTable = JBTable().apply {
+            // Allow multiple cell/row selection
+            setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION)
+            cellSelectionEnabled = true
+            rowSelectionAllowed = true
+            columnSelectionAllowed = true
+            
             // Add Ctrl+C/Cmd+C copy support
             // menuShortcutKeyMaskEx will automatically use Command on macOS and Ctrl on Windows/Linux
             registerKeyboardAction(
@@ -470,6 +483,9 @@ class AuthorsPanel(
         // Create a list model and JList for the changed files
         val changedFilesListModel = DefaultListModel<ChangedFileInfo>()
         val changedFilesList = JBList<ChangedFileInfo>(changedFilesListModel).apply {
+            // Allow multiple selection
+            selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+            
             // Add Ctrl+C/Cmd+C copy support
             // menuShortcutKeyMaskEx will automatically use Command on macOS and Ctrl on Windows/Linux
             registerKeyboardAction(
@@ -558,6 +574,12 @@ class AuthorsPanel(
         ticketsPanel.add(ticketsHeaderPanel, BorderLayout.NORTH)
         
         ticketsTable = JBTable().apply {
+            // Allow multiple cell/row selection
+            setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION)
+            cellSelectionEnabled = true
+            rowSelectionAllowed = true
+            columnSelectionAllowed = true
+            
             // Add Ctrl+C/Cmd+C copy support
             // menuShortcutKeyMaskEx will automatically use Command on macOS and Ctrl on Windows/Linux
             registerKeyboardAction(
@@ -586,7 +608,8 @@ class AuthorsPanel(
         // Add selection listener to show author details
         authorsTable.selectionModel.addListSelectionListener { e ->
             if (!e.valueIsAdjusting) {
-                val selectedRow = authorsTable.selectedRow
+                // Get the lead selection (primary selected row)
+                val selectedRow = authorsTable.selectionModel.leadSelectionIndex
                 if (selectedRow >= 0) {
                     val modelRow = authorsTable.convertRowIndexToModel(selectedRow)
                     val author = authorStats.values.toList()[modelRow]
@@ -607,6 +630,8 @@ class AuthorsPanel(
                         SwingUtilities.invokeLater {
                             if (authorCommitsTable.rowCount > 0) {
                                 try {
+                                    // Clear any previous selection and select just the first row
+                                    authorCommitsTable.clearSelection()
                                     authorCommitsTable.setRowSelectionInterval(0, 0)
                                     authorCommitsTable.scrollRectToVisible(authorCommitsTable.getCellRect(0, 0, true))
                                     
@@ -674,7 +699,8 @@ class AuthorsPanel(
                     // Create and add new selection listener to update changed files panel
                     authorCommitsSelectionListener = ListSelectionListener { e ->
                         if (!e.valueIsAdjusting) {
-                            val selectedRow = authorCommitsTable.selectedRow
+                            // Get the lead selection (primary selected row)
+                            val selectedRow = authorCommitsTable.selectionModel.leadSelectionIndex
                             if (selectedRow >= 0) {
                                 val modelRow = authorCommitsTable.convertRowIndexToModel(selectedRow)
                                 val commit = authorCommits[modelRow]
@@ -814,7 +840,8 @@ class AuthorsPanel(
                     // Add selection listener to tickets table
                     ticketsTable.selectionModel.addListSelectionListener { ticketEvent ->
                         if (!ticketEvent.valueIsAdjusting) {
-                            val selectedTicketRow = ticketsTable.selectedRow
+                            // Get the lead selection (primary selected row)
+                            val selectedTicketRow = ticketsTable.selectionModel.leadSelectionIndex
                             if (selectedTicketRow >= 0) {
                                 val ticketModelRow = ticketsTable.convertRowIndexToModel(selectedTicketRow)
                                 val ticketInfo = tickets[ticketModelRow]
@@ -832,6 +859,8 @@ class AuthorsPanel(
                                     SwingUtilities.invokeLater {
                                         if (authorCommitsTable.rowCount > 0) {
                                             try {
+                                                // Clear any previous selection and select just the first row
+                                                authorCommitsTable.clearSelection()
                                                 authorCommitsTable.setRowSelectionInterval(0, 0)
                                                 authorCommitsTable.scrollRectToVisible(authorCommitsTable.getCellRect(0, 0, true))
                                                 
@@ -899,7 +928,8 @@ class AuthorsPanel(
                                 // Create and add selection listener for the ticket-specific commits
                                 ticketCommitsSelectionListener = ListSelectionListener { e ->
                                     if (!e.valueIsAdjusting) {
-                                        val selectedRow = authorCommitsTable.selectedRow
+                                        // Get the lead selection (primary selected row)
+                                        val selectedRow = authorCommitsTable.selectionModel.leadSelectionIndex
                                         if (selectedRow >= 0) {
                                             val modelRow = authorCommitsTable.convertRowIndexToModel(selectedRow)
                                             val commit = ticketInfo.commits[modelRow]
@@ -991,6 +1021,8 @@ class AuthorsPanel(
      */
     fun selectFirstAuthor() {
         if (authorsTable.rowCount > 0) {
+            // Clear any previous selection and select just the first row
+            authorsTable.clearSelection()
             authorsTable.selectionModel.setSelectionInterval(0, 0)
             authorsTable.scrollRectToVisible(authorsTable.getCellRect(0, 0, true))
         }
