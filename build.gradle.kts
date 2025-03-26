@@ -99,6 +99,14 @@ tasks {
         args = listOf("--lists", "--debug")
     }
     
+    // Task to extract all employee emails to a file
+    register<JavaExec>("hibobEmails") {
+        description = "Extracts all employee emails to emails.txt"
+        mainClass.set("com.example.ijcommittracer.HiBobEmailsCliKt")
+        classpath = sourceSets["main"].runtimeClasspath
+        args = project.findProperty("cliArgs")?.toString()?.split(" ") ?: listOf()
+    }
+    
     // Task to create a standalone JAR for HiBobCli
     register<Jar>("hibobCliJar") {
         dependsOn(configurations.runtimeClasspath)
@@ -107,6 +115,25 @@ tasks {
         
         manifest {
             attributes["Main-Class"] = "com.example.ijcommittracer.HiBobCli"
+        }
+        
+        // Include all dependencies in the JAR
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+        from(sourceSets["main"].output)
+        
+        // Exclude unnecessary files from the JAR
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/MANIFEST.MF")
+    }
+    
+    // Task to create a standalone JAR for the emails extraction CLI
+    register<Jar>("hibobEmailsJar") {
+        dependsOn(configurations.runtimeClasspath)
+        archiveBaseName.set("hibob-emails")
+        archiveVersion.set(project.version.toString())
+        
+        manifest {
+            attributes["Main-Class"] = "com.example.ijcommittracer.HiBobEmailsCliKt"
         }
         
         // Include all dependencies in the JAR
