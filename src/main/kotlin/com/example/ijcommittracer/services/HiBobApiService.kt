@@ -1,13 +1,12 @@
 package com.example.ijcommittracer.services
 
 import com.example.ijcommittracer.api.HiBobApiClient
-import com.example.ijcommittracer.util.EnvFileReader
+import com.example.ijcommittracer.util.JsonConfigReader
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import java.io.File
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
@@ -17,11 +16,6 @@ import javax.swing.SwingUtilities
 
 @Service(Service.Level.PROJECT)
 class HiBobApiService(private val project: Project) {
-    // Constants for .env file properties
-    private val HIBOB_API_TOKEN_KEY = "HIBOB_API_TOKEN"
-    private val HIBOB_API_URL_KEY = "HIBOB_API_URL"
-    private val DEFAULT_HIBOB_API_URL = "https://api.hibob.com/v1"
-    
     private val inMemoryCache = ConcurrentHashMap<String, CachedEmployeeInfo>()
     private val LOG = logger<HiBobApiService>()
     private val tokenStorage = TokenStorageService.getInstance(project)
@@ -272,22 +266,14 @@ class HiBobApiService(private val project: Project) {
     }
     
     /**
-     * Get the API token from either .env file or credentials store
+     * Get the API token from configuration or credentials store
      */
     private fun getToken(): String? {
-        // Get path to .env file
-        val projectPath = project.basePath
-        val envFilePath = if (projectPath != null) {
-            File(projectPath, ".env").absolutePath
-        } else {
-            ""
-        }
-        
-        // Try to get token from .env file first
-        val envToken = EnvFileReader.getInstance(envFilePath).getProperty(HIBOB_API_TOKEN_KEY)
-        val token = if (!envToken.isNullOrBlank()) {
-            LOG.info("Using HiBob API token from .env file")
-            envToken
+        // Try to get token from configuration first
+        val configToken = configService.getHiBobToken()
+        val token = if (!configToken.isNullOrBlank()) {
+            LOG.info("Using HiBob API token from configuration")
+            configToken
         } else {
             // Fall back to tokenStorage
             tokenStorage.getHiBobToken()
@@ -297,21 +283,13 @@ class HiBobApiService(private val project: Project) {
     }
     
     /**
-     * Get the API base URL from either .env file or settings
+     * Get the API base URL from configuration or settings
      */
     private fun getBaseUrl(): String {
-        val projectPath = project.basePath
-        val envFilePath = if (projectPath != null) {
-            File(projectPath, ".env").absolutePath
-        } else {
-            ""
-        }
-        
-        // Try to get base URL from .env file first
-        return EnvFileReader.getInstance(envFilePath).getProperty(HIBOB_API_URL_KEY) 
-            ?: tokenStorage.getHiBobBaseUrl()
+        // Try to get base URL from configuration first
+        val configUrl = configService.getHiBobBaseUrl()
+        return configUrl.ifBlank { tokenStorage.getHiBobBaseUrl() }
     }
-    
     
     /**
      * Fetch all employees from HiBob API with enriched title and department data.
@@ -352,8 +330,6 @@ class HiBobApiService(private val project: Project) {
             return emptyList()
         }
     }
-    
-    
     
     companion object {
         @JvmStatic

@@ -1,7 +1,6 @@
 package com.example.ijcommittracer.services
 
 import com.example.ijcommittracer.CommitTracerBundle
-import com.example.ijcommittracer.util.EnvFileReader
 import com.intellij.credentialStore.CredentialAttributes
 import com.intellij.credentialStore.Credentials
 import com.intellij.credentialStore.generateServiceName
@@ -12,7 +11,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.util.io.HttpRequests
 import org.json.JSONObject
-import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 
@@ -23,27 +21,11 @@ import java.net.HttpURLConnection
 @Service(Service.Level.PROJECT)
 class YouTrackApiService(private val project: Project) {
     private val logger = Logger.getInstance(YouTrackApiService::class.java)
+    private val configService = ConfigurationService.getInstance(project)
     
-    // Constants for .env file properties
-    private val YOUTRACK_API_TOKEN_KEY = "YOUTRACK_API_TOKEN"
-    private val YOUTRACK_API_URL_KEY = "YOUTRACK_API_URL"
-    
-    // Path to the .env file in the project root
-    private val envFilePath by lazy {
-        val projectPath = project.basePath
-        if (projectPath != null) {
-            File(projectPath, ".env").absolutePath
-        } else {
-            ""
-        }
-    }
-    
-    // Get base URL from .env file or use default from bundle
+    // Get base URL from configuration or use default from bundle
     private val youtrackUrl by lazy { 
-        EnvFileReader.getInstance(envFilePath).getProperty(
-            YOUTRACK_API_URL_KEY, 
-            CommitTracerBundle.message("youtrack.api.url")
-        )
+        configService.getYouTrackUrl()
     }
     
     // Make these lazy too to ensure they're initialized after youtrackUrl
@@ -61,7 +43,7 @@ class YouTrackApiService(private val project: Project) {
      * @return A TicketInfo object containing ticket name and tags, or null if not found
      */
     fun fetchTicketInfo(issueId: String): TicketInfo? {
-        // Get token from password safe
+        // Get token from configuration or password safe
         val token = getStoredToken()
         if (token.isNullOrEmpty()) {
             logger.warn(CommitTracerBundle.message("notification.youtrack.no.token"))
@@ -201,14 +183,14 @@ class YouTrackApiService(private val project: Project) {
     
     /**
      * Retrieves the YouTrack API token.
-     * First tries to get the token from .env file, then falls back to password safe.
+     * First tries to get the token from configuration, then falls back to password safe.
      */
     private fun getStoredToken(): String? {
-        // Try to get token from .env file first
-        val envToken = EnvFileReader.getInstance(envFilePath).getProperty(YOUTRACK_API_TOKEN_KEY)
-        if (!envToken.isNullOrBlank()) {
-            logger.info("Using YouTrack API token from .env file")
-            return envToken
+        // Try to get token from configuration first
+        val configToken = configService.getYouTrackToken()
+        if (!configToken.isNullOrBlank()) {
+            logger.info("Using YouTrack API token from configuration")
+            return configToken
         }
         
         // Fall back to credential store

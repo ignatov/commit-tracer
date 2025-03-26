@@ -42,6 +42,9 @@ dependencies {
     
     // Add Gson for JSON parsing (email mappings)
     implementation("com.google.code.gson:gson:2.10.1")
+    
+    // Add JUnit for testing
+    testImplementation("junit:junit:4.13.2")
 }
 
 intellijPlatform {

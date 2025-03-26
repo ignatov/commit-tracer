@@ -20,68 +20,48 @@ An IntelliJ IDEA plugin that analyzes Git commit history and integrates with You
 
 ## Configuration
 
-The plugin uses two configuration files:
+The plugin uses a unified JSON configuration file (`.env.json`) for all settings:
+- API credentials (YouTrack, HiBob)
+- API URLs
+- Email mappings
 
-1. `.env` file for API credentials
-2. `email_mappings.json` for email mappings
+### Configuration File Format
 
-### .env Configuration
-
-The `.env` file stores API tokens and URLs:
-
-```
-# YouTrack API Configuration
-YOUTRACK_API_TOKEN=your_youtrack_token_here
-YOUTRACK_API_URL=https://youtrack.example.com/api
-
-# HiBob API Configuration
-HIBOB_API_TOKEN=your_hibob_api_token_here
-HIBOB_API_URL=https://api.hibob.com/v1
-```
-
-#### .env File Location
-
-The `.env` file should be placed in:
-1. Your project directory (preferred)
-2. User home directory (`~/.commitmapper/.env`) as fallback
-
-### Email Mappings Configuration
-
-Email mappings are stored in a JSON file:
+The `.env.json` file uses the following format:
 
 ```json
 {
-    "mappings": {
-        "personal@gmail.com": "developer@company.com",
-        "old.email@hotmail.com": "jane.smith@company.com"
-    }
-}
-```
-
-#### Email Mappings File Location
-
-The email mappings file (`email_mappings.json`) is stored in:
-1. Your project directory (preferred)
-2. User home directory (`~/.commitmapper/email_mappings.json`) as fallback
-
-#### Sample Email Mappings
-
-Here's a sample email mappings file:
-
-```json
-{
-    "mappings": {
+    "youtrackToken": "your-youtrack-token-here",
+    "youtrackUrl": "https://youtrack.example.com/api",
+    "hibobToken": "your-hibob-api-token-here",
+    "hibobApiUrl": "https://api.hibob.com/v1",
+    "emailMappings": {
         "personal@gmail.com": "developer@company.com",
         "old.email@hotmail.com": "jane.smith@company.com",
-        "john.personal@outlook.com": "john.doe@company.com",
-        "freelancer1234@gmail.com": "consultant@company.com",
-        "legacy.account@yahoo.com": "team.lead@company.com"
+        "john.personal@outlook.com": "john.doe@company.com"
     }
 }
 ```
 
-The plugin automatically watches for changes to both files and reloads when changes are detected.
+### Configuration File Location
 
+The `.env.json` file should be placed in:
+1. Your project directory (preferred)
+2. User home directory (`~/.commitmapper/.env.json`) as fallback
+
+The plugin automatically watches for changes to this file and reloads when changes are detected.
+
+### Email Mapping Configuration
+
+Email mappings are stored in the `emailMappings` section of the `.env.json` file.
+These mappings help identify employees who commit using personal email addresses.
+
+#### Email Mapping Rules
+
+1. If a mapping exists for an email address, the mapped address is used for HiBob lookups
+2. If no mapping exists, the original address is used as-is
+3. Email lookups in HiBob are case-insensitive
+4. Mappings are applied before any HiBob API calls are made
 
 ## Usage
 
@@ -120,11 +100,11 @@ If you need to access configurations programmatically within the plugin:
 // Get the configuration service
 val configService = ConfigurationService.getInstance(project)
 
-// Access YouTrack settings from .env file
+// Access YouTrack settings
 val youtrackToken = configService.getYouTrackToken()
 val youtrackUrl = configService.getYouTrackUrl()
 
-// Access HiBob settings from .env file
+// Access HiBob settings
 val hibobToken = configService.getHiBobToken()
 val hibobUrl = configService.getHiBobBaseUrl()
 
@@ -134,11 +114,14 @@ val standardEmail = configService.mapEmail("personal@gmail.com")
 
 // Get all email mappings
 val allMappings = configService.getAllEmailMappings()
+
+// Update a configuration value
+configService.updateValue("youtrackToken", "new-token-value")
 ```
 
 ### File Monitoring
 
-The plugin continuously monitors both the `.env` file and the email mappings file for changes. When you modify either file:
+The plugin continuously monitors the configuration file for changes. When you modify the file:
 
 1. The plugin automatically detects the changes
 2. Reloads the configuration

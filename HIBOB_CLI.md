@@ -14,28 +14,33 @@ This will create a JAR file in the `build/libs/` directory.
 
 ## Configuration
 
-### Email Mapping Configuration
+### Configuration File
 
-The HiBob CLI now supports mapping personal email addresses to corporate identities via the `email_mappings.json` file.
-
-#### File Format
-
-The email mappings file is a simple JSON document that maps non-standard emails to their standard corporate counterparts:
+The HiBob CLI uses a single JSON configuration file (`.env.json`) with the following format:
 
 ```json
 {
-  "personal@gmail.com": "developer@company.com",
-  "old.email@hotmail.com": "jane.smith@company.com"
+    "hibobToken": "your-hibob-api-token-here",
+    "hibobApiUrl": "https://api.hibob.com/v1",
+    "emailMappings": {
+        "personal@gmail.com": "developer@company.com",
+        "old.email@hotmail.com": "jane.smith@company.com",
+        "john.personal@outlook.com": "john.doe@company.com"
+    }
 }
 ```
 
-#### Default Locations
+### Default Configuration Locations
 
-The system looks for email mappings in the following locations, in order:
+The system looks for the config file in the following locations, in order:
 
-1. The location specified via the `--mappings-file` CLI argument
-2. A project-specific file at `[project_directory]/email_mappings.json`
-3. A user-specific file at `~/.commitmapper/email_mappings.json`
+1. The path specified via a command-line argument (any `.json` file)
+2. `.env.json` in the current directory
+3. `~/.commitmapper/.env.json` in the user's home directory
+
+### Email Mapping
+
+Email mappings are stored in the `emailMappings` section of the configuration file.
 
 #### Email Mapping Rules
 
@@ -49,8 +54,8 @@ The system looks for email mappings in the following locations, in order:
 You can provide your HiBob API token in several ways:
 
 1. Command line argument: `token=YOUR_TOKEN`
-2. Environment variable: Set `HIBOB_API_TOKEN` environment variable
-3. .env file: Create a file with `HIBOB_API_TOKEN=YOUR_TOKEN` and provide the path to the file
+2. Environment variable: Set `hibobToken` environment variable
+3. Configuration file: Set the `hibobToken` field in the `.env.json` file
 
 ## Running the CLI
 
@@ -68,11 +73,8 @@ You can run the CLI directly with Gradle:
 # Use a different API URL
 ./gradlew runHiBobCli -PcliArgs="https://api.hibob.io/v1 token=YOUR_TOKEN"
 
-# Use a .env file for credentials
-./gradlew runHiBobCli -PcliArgs="/path/to/.env"
-
-# Specify a custom mappings file
-./gradlew runHiBobCli -PcliArgs="--mappings-file=/path/to/email_mappings.json token=YOUR_TOKEN"
+# Use a config file for credentials and mappings
+./gradlew runHiBobCli -PcliArgs="/path/to/.env.json"
 ```
 
 ### Using JAR File
@@ -86,61 +88,59 @@ java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar token=YOUR_TOKEN
 # Fetch a specific employee by email (with automatic email mapping)
 java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar user@example.com token=YOUR_TOKEN
 
-# Use a .env file for credentials
-java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar /path/to/.env
+# Use a config file for credentials and mappings
+java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar /path/to/.env.json
 ```
 
-### New Command-Line Options
+### Command-Line Options
 
 ```
 java -jar hibob-cli.jar [options]
 
 Options:
-  --mappings-file=PATH         Path to the email mappings JSON file
+  [email@example.com]          Email address to lookup
+  [https://api.hibob.com/v1]   HiBob API URL
+  [token=TOKEN]                HiBob API token (overrides config file)
+  [/path/to/.env.json]         Path to config file
+  
+  --debug, -d                  Enable debug output
+  --lists, -l                  List available named lists
+  --list=LIST_NAME             Display specific list (title, department)
+  --find=TEXT                  Search for items containing text
+  --department=ID              Look up department by ID
+  --title=ID                   Look up title by ID
+  
+  --list-mappings              List all email mappings
   --add-mapping=FROM:TO        Add an email mapping (FROM → TO)
   --remove-mapping=EMAIL       Remove a mapping for the specified email
-  --list-mappings              List all current email mappings
-  token=TOKEN                  HiBob API token (overrides .env file)
-  url=URL                      HiBob API URL (default: https://api.hibob.com/v1)
 ```
 
 ### Email Mapping Management
 
 ```bash
+# List all current mappings
+java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar --list-mappings
+
 # Add a mapping from personal@gmail.com to work@company.com
 java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar --add-mapping=personal@gmail.com:work@company.com
 
 # Remove the mapping for personal@gmail.com
 java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar --remove-mapping=personal@gmail.com
 
-# List all current mappings
-java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar --list-mappings
-```
-
-## Sample Email Mappings File
-
-Here's a sample `email_mappings.json` file:
-
-```json
-{
-  "personal@gmail.com": "developer@company.com",
-  "old.email@hotmail.com": "jane.smith@company.com",
-  "john.personal@outlook.com": "john.doe@company.com",
-  "freelancer1234@gmail.com": "consultant@company.com",
-  "legacy.account@yahoo.com": "team.lead@company.com"
-}
+# Specify a custom config file
+java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar /path/to/.env.json --list-mappings
 ```
 
 ## Debugging
 
-To enable debug logs for the env file reader, set the `debug.env` system property to `true`:
+To enable debug logs, use the `--debug` or `-d` flag:
 
 ```bash
 # With the JAR file
-java -Ddebug.env=true -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar /path/to/.env
+java -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar --debug /path/to/.env.json
 
 # With Gradle
-./gradlew runHiBobCli -PcliArgs="/path/to/.env" -Ddebug.env=true
+./gradlew runHiBobCli -PcliArgs="/path/to/.env.json --debug"
 ```
 
 ## Example Output
@@ -148,10 +148,9 @@ java -Ddebug.env=true -jar build/libs/hibob-cli-1.0-SNAPSHOT.jar /path/to/.env
 ```
 HiBob CLI - 2025-03-24T12:34:56.789
 -----------------------------------------------
-Using token from command line arguments
+Using token from configuration file
 Using HiBob API URL: https://api.hibob.com/v1
-Email mappings loaded from: /project/email_mappings.json (5 mappings)
-
+Loaded 5 email mappings from configuration
 Mapping email: personal@gmail.com → developer@company.com
 
 Fetching employee information...
