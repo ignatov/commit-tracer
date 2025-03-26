@@ -25,6 +25,7 @@ class HiBobApiService(private val project: Project) {
     private val inMemoryCache = ConcurrentHashMap<String, CachedEmployeeInfo>()
     private val LOG = logger<HiBobApiService>()
     private val tokenStorage = TokenStorageService.getInstance(project)
+    private val configService = ConfigurationService.getInstance(project)
 
     // State object for persistent storage
     private var myState = HiBobState()
@@ -85,19 +86,28 @@ class HiBobApiService(private val project: Project) {
      * Uses cache if available. Returns null if not found.
      * 
      * Thread-safe implementation that avoids race conditions.
+     * Maps non-standard emails to standard emails using the ConfigurationService.
      */
     fun getEmployeeByEmail(email: String): EmployeeInfo? {
+        // Map the email before looking up
+        val mappedEmail = configService.mapEmail(email)
+        
+        // Log if email was mapped
+        if (mappedEmail != email) {
+            LOG.info("Mapped email from $email to $mappedEmail")
+        }
+        
         // First quick check without synchronization
-        inMemoryCache[email]?.let { cachedInfo ->
-            LOG.debug("Returning employee info for $email from cache (quick path)")
+        inMemoryCache[mappedEmail]?.let { cachedInfo ->
+            LOG.debug("Returning employee info for $mappedEmail from cache (quick path)")
             return cachedInfo.info
         }
         
         // If not found, check if we need to refresh cache
         synchronized(this) {
             // Check cache again in case another thread refreshed while we were waiting
-            inMemoryCache[email]?.let { cachedInfo ->
-                LOG.debug("Returning employee info for $email from cache (after sync)")
+            inMemoryCache[mappedEmail]?.let { cachedInfo ->
+                LOG.debug("Returning employee info for $mappedEmail from cache (after sync)")
                 return cachedInfo.info
             }
             
@@ -105,14 +115,22 @@ class HiBobApiService(private val project: Project) {
             checkAndRefreshCacheIfNeeded()
             
             // One more check after potential refresh
-            inMemoryCache[email]?.let { cachedInfo ->
-                LOG.debug("Returning employee info for $email from cache (after refresh)")
+            inMemoryCache[mappedEmail]?.let { cachedInfo ->
+                LOG.debug("Returning employee info for $mappedEmail from cache (after refresh)")
                 return cachedInfo.info
+            }
+            
+            // If still not found, try with the original email as fallback
+            if (mappedEmail != email) {
+                inMemoryCache[email]?.let { cachedInfo ->
+                    LOG.debug("Mapped email not found, but original email $email found in cache")
+                    return cachedInfo.info
+                }
             }
             
             // If still not found, return null
             // We don't do individual lookups - all data should be loaded in batch
-            LOG.debug("Employee $email not found in cache after refresh check")
+            LOG.debug("Employee $mappedEmail not found in cache after refresh check")
             return null
         }
     }
@@ -294,6 +312,7 @@ class HiBobApiService(private val project: Project) {
             ?: tokenStorage.getHiBobBaseUrl()
     }
     
+    
     /**
      * Fetch all employees from HiBob API with enriched title and department data.
      * Uses the simplified API client method that handles all steps in one call.
@@ -333,6 +352,7 @@ class HiBobApiService(private val project: Project) {
             return emptyList()
         }
     }
+    
     
     
     companion object {

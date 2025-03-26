@@ -1,0 +1,9 @@
+{
+    "mappings": {
+        "personal@gmail.com": "developer@company.com",
+        "old.email@hotmail.com": "jane.smith@company.com",
+        "john.personal@outlook.com": "john.doe@company.com",
+        "freelancer1234@gmail.com": "consultant@company.com",
+        "legacy.account@yahoo.com": "team.lead@company.com"
+    }
+}

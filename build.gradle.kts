@@ -39,6 +39,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.7.3")
+    
+    // Add Gson for JSON parsing (email mappings)
+    implementation("com.google.code.gson:gson:2.10.1")
 }
 
 intellijPlatform {

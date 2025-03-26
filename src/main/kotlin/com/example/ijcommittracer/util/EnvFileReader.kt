@@ -168,6 +168,33 @@ class EnvFileReader(private val envFilePath: String) {
     }
     
     /**
+     * Gets all properties from the .env file.
+     * Thread-safe implementation that ensures proper initialization.
+     * 
+     * @return A copy of all properties as a Map
+     */
+    fun getAllProperties(): Map<String, String> {
+        // Initialize if needed (will acquire write lock internally)
+        if (!initialized) {
+            initialize()
+        }
+        
+        // Use read lock for property access
+        return lock.read {
+            checkFileChanged()
+            
+            // Convert Properties to a standard Map
+            val result = HashMap<String, String>()
+            envProperties.stringPropertyNames().forEach { key ->
+                envProperties.getProperty(key)?.let { value ->
+                    result[key] = value
+                }
+            }
+            result
+        }
+    }
+    
+    /**
      * Checks if the .env file has been modified since it was last loaded.
      * If it has, reload the properties.
      */

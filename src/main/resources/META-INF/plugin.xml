@@ -39,6 +39,7 @@
                            
         <!-- Register services -->
         <projectService serviceImplementation="com.example.ijcommittracer.services.TokenStorageService"/>
+        <projectService serviceImplementation="com.example.ijcommittracer.services.ConfigurationService"/>
         <projectService serviceImplementation="com.example.ijcommittracer.services.HiBobApiService"/>
         <projectService serviceImplementation="com.example.ijcommittracer.services.YouTrackApiService"/>
         <projectService serviceImplementation="com.example.ijcommittracer.services.NotificationService"/>
@@ -55,39 +56,9 @@
                 <keyboard-shortcut first-keystroke="control alt G" second-keystroke="L" keymap="$default"/>
             </action>
             
-            <!-- Add separator before YouTrack actions -->
             <separator/>
             
-            <!-- Add YouTrack token configuration actions -->
-            <action id="IjCommitTracer.ConfigureYouTrackToken" 
-                    class="com.example.ijcommittracer.actions.ConfigureYouTrackTokenAction" 
-                    text="Configure YouTrack Token" 
-                    description="Set or update YouTrack API token"
-                    icon="/icons/youtrack.svg">
-            </action>
-            
-            <action id="IjCommitTracer.ClearYouTrackToken" 
-                    class="com.example.ijcommittracer.actions.ClearYouTrackTokenAction" 
-                    text="Clear YouTrack Token" 
-                    description="Remove stored YouTrack API token"
-                    icon="/icons/youtrack.svg">
-            </action>
-            
-            <!-- Add separator before HiBob actions -->
-            <separator/>
-            
-            <!-- Add HiBob token configuration actions -->
-            <action id="IjCommitTracer.ConfigureHiBobToken" 
-                    class="com.example.ijcommittracer.actions.ConfigureHiBobTokenAction" 
-                    text="Configure HiBob Token" 
-                    description="Set or update HiBob API token">
-            </action>
-            
-            <action id="IjCommitTracer.ClearHiBobToken" 
-                    class="com.example.ijcommittracer.actions.ClearHiBobTokenAction" 
-                    text="Clear HiBob Token" 
-                    description="Remove stored HiBob API token">
-            </action>
+
         </group>
         
         <group id="IjCommitTracer.VcsMenu" text="Commit Tracer" description="Commit Tracer Tool">
@@ -99,39 +70,8 @@
                     icon="/icons/git-commit.svg">
             </action>
             
-            <!-- Add separator before YouTrack actions -->
+            <!-- Add separator before configuration actions -->
             <separator/>
-            
-            <!-- Add YouTrack token configuration actions -->
-            <action id="IjCommitTracer.ConfigureYouTrackTokenVcs" 
-                    class="com.example.ijcommittracer.actions.ConfigureYouTrackTokenAction" 
-                    text="Configure YouTrack Token" 
-                    description="Set or update YouTrack API token"
-                    icon="/icons/youtrack.svg">
-            </action>
-            
-            <action id="IjCommitTracer.ClearYouTrackTokenVcs" 
-                    class="com.example.ijcommittracer.actions.ClearYouTrackTokenAction" 
-                    text="Clear YouTrack Token" 
-                    description="Remove stored YouTrack API token"
-                    icon="/icons/youtrack.svg">
-            </action>
-            
-            <!-- Add separator before HiBob actions -->
-            <separator/>
-            
-            <!-- Add HiBob token configuration actions -->
-            <action id="IjCommitTracer.ConfigureHiBobTokenVcs" 
-                    class="com.example.ijcommittracer.actions.ConfigureHiBobTokenAction" 
-                    text="Configure HiBob Token" 
-                    description="Set or update HiBob API token">
-            </action>
-            
-            <action id="IjCommitTracer.ClearHiBobTokenVcs" 
-                    class="com.example.ijcommittracer.actions.ClearHiBobTokenAction" 
-                    text="Clear HiBob Token" 
-                    description="Remove stored HiBob API token">
-            </action>
         </group>
         
         <!-- Add to the VCS popup menu -->
