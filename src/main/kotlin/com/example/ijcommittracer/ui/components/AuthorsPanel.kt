@@ -64,6 +64,7 @@ class AuthorsPanel(
     private fun addTableContextMenu(table: JTable) {
         val popupMenu = JPopupMenu()
         val copyMenuItem = JMenuItem(CommitTracerBundle.message("dialog.copy.to.clipboard.csv"))
+        copyMenuItem.toolTipText = CommitTracerBundle.message("dialog.copy.shortcut.hint")
         copyMenuItem.addActionListener { copyTableToClipboard(table) }
         popupMenu.add(copyMenuItem)
         
@@ -77,6 +78,7 @@ class AuthorsPanel(
     private fun addListContextMenu(list: JList<*>) {
         val popupMenu = JPopupMenu()
         val copyMenuItem = JMenuItem(CommitTracerBundle.message("dialog.copy.to.clipboard"))
+        copyMenuItem.toolTipText = CommitTracerBundle.message("dialog.copy.shortcut.hint")
         copyMenuItem.addActionListener { copyListToClipboard(list) }
         popupMenu.add(copyMenuItem)
         
@@ -213,7 +215,8 @@ class AuthorsPanel(
         authorsTable = JBTable(tableModel).apply {
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
             
-            // Add Ctrl+C copy support
+            // Add Ctrl+C/Cmd+C copy support
+            // menuShortcutKeyMaskEx will automatically use Command on macOS and Ctrl on Windows/Linux
             registerKeyboardAction(
                 { copyTableToClipboard(this) },
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
@@ -443,7 +446,8 @@ class AuthorsPanel(
         
         // Create author commits table
         authorCommitsTable = JBTable().apply {
-            // Add Ctrl+C copy support
+            // Add Ctrl+C/Cmd+C copy support
+            // menuShortcutKeyMaskEx will automatically use Command on macOS and Ctrl on Windows/Linux
             registerKeyboardAction(
                 { copyTableToClipboard(this) },
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
@@ -466,7 +470,8 @@ class AuthorsPanel(
         // Create a list model and JList for the changed files
         val changedFilesListModel = DefaultListModel<ChangedFileInfo>()
         val changedFilesList = JBList<ChangedFileInfo>(changedFilesListModel).apply {
-            // Add Ctrl+C copy support
+            // Add Ctrl+C/Cmd+C copy support
+            // menuShortcutKeyMaskEx will automatically use Command on macOS and Ctrl on Windows/Linux
             registerKeyboardAction(
                 { copyListToClipboard(this) },
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
@@ -553,7 +558,8 @@ class AuthorsPanel(
         ticketsPanel.add(ticketsHeaderPanel, BorderLayout.NORTH)
         
         ticketsTable = JBTable().apply {
-            // Add Ctrl+C copy support
+            // Add Ctrl+C/Cmd+C copy support
+            // menuShortcutKeyMaskEx will automatically use Command on macOS and Ctrl on Windows/Linux
             registerKeyboardAction(
                 { copyTableToClipboard(this) },
                 KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
