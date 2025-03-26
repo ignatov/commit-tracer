@@ -5,6 +5,7 @@ import com.example.ijcommittracer.actions.ListCommitsAction.AuthorStats
 import com.example.ijcommittracer.actions.ListCommitsAction.ChangedFileInfo
 import com.example.ijcommittracer.actions.ListCommitsAction.ChangeType
 import com.example.ijcommittracer.actions.ListCommitsAction.CommitInfo
+import com.example.ijcommittracer.services.NotificationService
 import com.example.ijcommittracer.ui.models.AuthorTableModel
 import com.example.ijcommittracer.ui.models.CommitTableModel
 import com.example.ijcommittracer.ui.models.TicketsTableModel
@@ -22,6 +23,8 @@ import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.Font
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.*
@@ -30,6 +33,7 @@ import javax.swing.event.ChangeEvent
 import javax.swing.event.DocumentListener
 import javax.swing.event.ListSelectionListener
 import javax.swing.table.DefaultTableCellRenderer
+import javax.swing.table.TableModel
 import javax.swing.table.TableRowSorter
 
 /**
@@ -54,6 +58,148 @@ class AuthorsPanel(
         initialize()
     }
     
+    /**
+     * Adds a context menu to a table with copy functionality
+     */
+    private fun addTableContextMenu(table: JTable) {
+        val popupMenu = JPopupMenu()
+        val copyMenuItem = JMenuItem(CommitTracerBundle.message("dialog.copy.to.clipboard.csv"))
+        copyMenuItem.addActionListener { copyTableToClipboard(table) }
+        popupMenu.add(copyMenuItem)
+        
+        // Show the menu on right-click
+        table.componentPopupMenu = popupMenu
+    }
+    
+    /**
+     * Adds a context menu to a list with copy functionality
+     */
+    private fun addListContextMenu(list: JList<*>) {
+        val popupMenu = JPopupMenu()
+        val copyMenuItem = JMenuItem(CommitTracerBundle.message("dialog.copy.to.clipboard"))
+        copyMenuItem.addActionListener { copyListToClipboard(list) }
+        popupMenu.add(copyMenuItem)
+        
+        // Show the menu on right-click
+        list.componentPopupMenu = popupMenu
+    }
+    
+    /**
+     * Utility function to copy list data as CSV to clipboard
+     */
+    private fun copyListToClipboard(list: JList<*>) {
+        val selectedIndices = list.selectedIndices
+        
+        // Check if the list is empty
+        if (list.model.size == 0) {
+            NotificationService.showInfo(null, CommitTracerBundle.message("dialog.notification.no.data"), "Commit Tracer")
+            return
+        }
+        
+        // If nothing is selected, select all
+        val indices = if (selectedIndices.isEmpty()) (0 until list.model.size).toList() else selectedIndices.toList()
+        
+        val sb = StringBuilder()
+        
+        // Add each selected item to the CSV
+        for (i in indices.indices) {
+            val item = list.model.getElementAt(indices[i])
+            
+            // Handle ChangedFileInfo specially
+            val text = when (item) {
+                is ChangedFileInfo -> {
+                    val prefix = when(item.changeType) {
+                        ChangeType.ADDED -> "[+]"
+                        ChangeType.DELETED -> "[-]"
+                        ChangeType.MODIFIED -> "[M]"
+                    }
+                    val testMarker = if (item.isTestFile) "[Test]" else ""
+                    "$prefix $testMarker ${item.path}"
+                }
+                else -> item.toString()
+            }
+            
+            // Properly escape and quote each item
+            sb.append("\"${escapeCSV(text)}\"")
+            
+            if (i < indices.size - 1) sb.append("\n")
+        }
+        
+        // Copy to clipboard
+        val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+        val selection = StringSelection(sb.toString())
+        clipboard.setContents(selection, null)
+        
+        // Show notification
+        NotificationService.showInfo(null, CommitTracerBundle.message("dialog.notification.copied"), "Commit Tracer")
+    }
+    
+    /**
+     * Utility function to copy table data as CSV to clipboard
+     */
+    private fun copyTableToClipboard(table: JTable, includeHeaders: Boolean = true) {
+        val selectedRows = table.selectedRows
+        val selectedColumns = table.selectedColumns
+        
+        // Check if the table is empty
+        if (table.rowCount == 0) {
+            NotificationService.showInfo(null, CommitTracerBundle.message("dialog.notification.no.data"), "Commit Tracer")
+            return
+        }
+        
+        // If nothing is selected, select all
+        val rows = if (selectedRows.isEmpty()) (0 until table.rowCount).toList() else selectedRows.toList()
+        val columns = if (selectedColumns.isEmpty()) (0 until table.columnCount).toList() else selectedColumns.toList()
+        
+        val model = table.model
+        val sb = StringBuilder()
+        
+        // Add headers if requested
+        if (includeHeaders) {
+            for (colIndex in columns.indices) {
+                if (colIndex > 0) sb.append(",")
+                // Properly escape and quote column headers
+                sb.append("\"${escapeCSV(model.getColumnName(columns[colIndex]))}\"")
+            }
+            sb.append("\n")
+        }
+        
+        // Add selected data
+        for (rowIndex in rows.indices) {
+            val modelRow = if (table.rowSorter != null) table.convertRowIndexToModel(rows[rowIndex]) else rows[rowIndex]
+            
+            for (colIndex in columns.indices) {
+                if (colIndex > 0) sb.append(",")
+                
+                // Get cell value and convert to string
+                val value = model.getValueAt(modelRow, columns[colIndex])
+                val cellText = when (value) {
+                    is Boolean -> if (value) "Yes" else "No"
+                    else -> value.toString()
+                }
+                
+                // Properly escape and quote each cell
+                sb.append("\"${escapeCSV(cellText)}\"")
+            }
+            if (rowIndex < rows.size - 1) sb.append("\n")
+        }
+        
+        // Copy to clipboard
+        val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+        val selection = StringSelection(sb.toString())
+        clipboard.setContents(selection, null)
+        
+        // Show notification
+        NotificationService.showInfo(null, CommitTracerBundle.message("dialog.notification.copied"), "Commit Tracer")
+    }
+    
+    /**
+     * Escapes double quotes in CSV cells by doubling them
+     */
+    private fun escapeCSV(text: String): String {
+        return text.replace("\"", "\"\"")
+    }
+    
     private fun initialize() {
         // Extract HiBob info presence for UI customization
         val hasHiBobInfo = authorStats.values.any { 
@@ -66,6 +212,16 @@ class AuthorsPanel(
         
         authorsTable = JBTable(tableModel).apply {
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+            
+            // Add Ctrl+C copy support
+            registerKeyboardAction(
+                { copyTableToClipboard(this) },
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
+                JComponent.WHEN_FOCUSED
+            )
+            
+            // Add context menu for right-click copy
+            addTableContextMenu(this)
             
             // Set column widths
             columnModel.getColumn(0).preferredWidth = 200 // Author (email)
@@ -286,7 +442,17 @@ class AuthorsPanel(
         authorCommitsPanel.add(authorCommitsHeaderPanel, BorderLayout.NORTH)
         
         // Create author commits table
-        authorCommitsTable = JBTable()
+        authorCommitsTable = JBTable().apply {
+            // Add Ctrl+C copy support
+            registerKeyboardAction(
+                { copyTableToClipboard(this) },
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
+                JComponent.WHEN_FOCUSED
+            )
+            
+            // Add context menu for right-click copy
+            addTableContextMenu(this)
+        }
         val authorCommitsScrollPane = JBScrollPane(authorCommitsTable)
         
         // Create changed files panel
@@ -300,6 +466,16 @@ class AuthorsPanel(
         // Create a list model and JList for the changed files
         val changedFilesListModel = DefaultListModel<ChangedFileInfo>()
         val changedFilesList = JBList<ChangedFileInfo>(changedFilesListModel).apply {
+            // Add Ctrl+C copy support
+            registerKeyboardAction(
+                { copyListToClipboard(this) },
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
+                JComponent.WHEN_FOCUSED
+            )
+            
+            // Add context menu for right-click copy
+            addListContextMenu(this)
+            
             setCellRenderer(object : DefaultListCellRenderer() {
                 override fun getListCellRendererComponent(
                     list: JList<*>,
@@ -376,7 +552,17 @@ class AuthorsPanel(
         
         ticketsPanel.add(ticketsHeaderPanel, BorderLayout.NORTH)
         
-        ticketsTable = JBTable()
+        ticketsTable = JBTable().apply {
+            // Add Ctrl+C copy support
+            registerKeyboardAction(
+                { copyTableToClipboard(this) },
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx),
+                JComponent.WHEN_FOCUSED
+            )
+            
+            // Add context menu for right-click copy
+            addTableContextMenu(this)
+        }
         val ticketsScrollPane = JBScrollPane(ticketsTable)
         ticketsPanel.add(ticketsScrollPane, BorderLayout.CENTER)
         
